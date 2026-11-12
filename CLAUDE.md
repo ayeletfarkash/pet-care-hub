@@ -6,7 +6,13 @@ Session continuity: [docs/handoff.md](docs/handoff.md) — read at session start
 **These project rules override the user-level `~/.claude/CLAUDE.md` for this project** (notably: no automatic Opus, security review is proportional, not mandatory on every change).
 
 ## Project status
-Greenfield. Tech stack, database and test tooling are **not chosen yet** (PRD §21 leaves them open). First real task: stack + schema decision with the Architect agent, then fill in `docs/architecture.md`, `docs/development.md`, `docs/testing.md`. Do not create those docs before there is content for them.
+Phase 1 (Core Foundation) implemented. Stack: Next.js 16 + TypeScript + Drizzle/SQLite + Tailwind 4; Vitest + Playwright/axe.
+- Architecture & decisions: [docs/architecture.md](docs/architecture.md)
+- Setup, env vars, conventions: [docs/development.md](docs/development.md)
+- Test layers & commands: [docs/testing.md](docs/testing.md)
+- Next.js 16 differs from older versions: read `AGENTS.md` / `node_modules/next/dist/docs/` before using unfamiliar APIs.
+
+Hard rules from the architecture: group-scoped services start with `requireMembership`; all DB writes go through `writeTx`; UI strings live in `src/i18n`.
 
 ## Model policy (Claude Pro)
 - Default: **Sonnet** for planning, implementation, debugging, review and orchestration (set in `.claude/settings.json`).
@@ -26,7 +32,7 @@ Greenfield. Tech stack, database and test tooling are **not chosen yet** (PRD §
 | `qa-specialist` | Significant feature, missing coverage, regression risk; may run tests | Read + Bash (tests only) |
 | `security-reviewer` | Auth, roles/permissions, group isolation, invitations, file access, deletion | Read-only |
 
-Invoke by name: *"Use the architect agent to …"* or `@architect …`.
+Invoke by name: *"Use the architect agent to …"* or `@architect …`. Agent files load at session start; if one isn't available yet, run a general-purpose Sonnet agent told to read and follow `.claude/agents/<name>.md`.
 
 ### Orchestration rules
 - Main session = orchestrator and sole implementer. Agents advise; they don't edit app code.
