@@ -29,6 +29,8 @@ export async function createPet(page: Page, name: string, species = "dog") {
 
 /** WCAG 2.x A/AA automated checks. Fails with a readable list of violations. */
 export async function expectNoA11yViolations(page: Page) {
+  // Let colour transitions (e.g. switching to high contrast) finish, or axe samples mid-fade.
+  await page.waitForFunction(() => document.getAnimations().length === 0);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

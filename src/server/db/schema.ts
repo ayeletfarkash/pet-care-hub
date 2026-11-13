@@ -324,3 +324,113 @@ export const taskTransferRequests = sqliteTable(
   // One open request per task (partial unique index).
   (t) => [uniqueIndex("task_transfer_pending_uq").on(t.taskId).where(sql`status = 'pending'`)],
 );
+
+// ───────────────────────────── Phase 3 ─────────────────────────────
+// The group's pet is implicit (pets.group_id is UNIQUE), so no pet_id columns.
+export const INVENTORY_TYPES = ["food", "medication", "treats", "supplies", "other"] as const;
+export const MOVEMENT_KINDS = ["purchase", "consumption", "adjustment", "depleted"] as const;
+
+export const inventoryItems = sqliteTable(
+  "inventory_items",
+  {
+    id: id(),
+    groupId: groupRef(),
+    name: text("name").notNull(),
+    brand: text("brand"),
+    type: text("type", { enum: INVENTORY_TYPES }).notNull(),
+    unit: text("unit"), // free text: "kg", "cans", "tablets"
+    quantity: real("quantity").notNull().default(0), // depleted = 0
+    packageSize: real("package_size"),
+    dailyUsage: real("daily_usage"), // estimated consumption per day (PRD §8.4)
+    lowStockThreshold: real("low_stock_threshold"),
+    vendor: text("vendor"),
+    price: real("price"),
+    purchaseDate: text("purchase_date"),
+    medicationPlanId: text("medication_plan_id").references(() => medicationPlans.id, { onDelete: "set null" }), // PRD §6.5
+    notes: text("notes"),
+    createdById: userRef("created_by_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("inventory_group_idx").on(t.groupId)],
+);
+
+export const ORDER_STATUSES = ["ordered", "processing", "shipped", "delivered", "cancelled"] as const;
+
+export const orders = sqliteTable(
+  "orders",
+  {
+    id: id(),
+    groupId: groupRef(),
+    product: text("product").notNull(),
+    itemId: text("item_id").references(() => inventoryItems.id, { onDelete: "set null" }),
+    vendor: text("vendor"),
+    url: text("url"), // http(s) only, validated
+    orderDate: text("order_date").notNull(),
+    expectedDelivery: text("expected_delivery"),
+    price: real("price"),
+    quantity: real("quantity"), // in the linked item's unit
+    status: text("status", { enum: ORDER_STATUSES }).notNull().default("ordered"),
+    deliveredAt: text("delivered_at"),
+    notes: text("notes"),
+    createdById: userRef("created_by_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("orders_group_date_idx").on(t.groupId, t.orderDate)],
+);
+
+export const inventoryMovements = sqliteTable(
+  "inventory_movements",
+  {
+    id: id(),
+    groupId: groupRef(),
+    itemId: text("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: MOVEMENT_KINDS }).notNull(),
+    delta: real("delta").notNull(),
+    quantityAfter: real("quantity_after").notNull(),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+    byUserId: userRef("by_user_id"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  // A delivered order adds stock at most once.
+  (t) => [index("movements_item_idx").on(t.itemId), uniqueIndex("movements_order_uq").on(t.orderId).where(sql`order_id IS NOT NULL`)],
+);
+
+export const routines = sqliteTable(
+  "routines",
+  {
+    id: id(),
+    groupId: groupRef(),
+    name: text("name").notNull(),
+    description: text("description"),
+    scheduleType: text("schedule_type", { enum: SCHEDULE_TYPES }).notNull(), // same rules as medication plans
+    times: text("times", { mode: "json" }).$type<string[]>().notNull(),
+    weekdays: text("weekdays", { mode: "json" }).$type<number[]>().notNull(),
+    intervalDays: integer("interval_days"),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date"),
+    responsibleUserId: userRef("responsible_user_id"),
+    createdById: userRef("created_by_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("routines_group_idx").on(t.groupId)],
+);
+
+export const routineLogs = sqliteTable(
+  "routine_logs",
+  {
+    id: id(),
+    groupId: groupRef(),
+    routineId: text("routine_id").notNull().references(() => routines.id, { onDelete: "cascade" }),
+    scheduledFor: text("scheduled_for"), // null = extra, unscheduled activity (always "completed")
+    status: text("status", { enum: ["completed", "missed"] }).notNull(),
+    at: text("at").notNull(), // local time it was logged
+    byUserId: userRef("by_user_id"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("routine_logs_occ_uq").on(t.routineId, t.scheduledFor), index("routine_logs_group_idx").on(t.groupId)],
+);

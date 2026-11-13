@@ -18,6 +18,9 @@ export default async function GroupLayout({ children, params }: { children: Reac
           { href: "/medications", label: n.medications },
           { href: "/calendar", label: n.calendar, also: "/events" },
           { href: "/tasks", label: n.tasks },
+          { href: "/routines", label: n.routines },
+          { href: "/inventory", label: n.inventory },
+          { href: "/orders", label: n.orders },
           { href: "/members", label: n.members },
         ]}
       />

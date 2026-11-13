@@ -3,14 +3,15 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phase 1 merged into `dev`. **Phase 2 implemented** on `feature/phase-2-daily-care` (uncommitted until approved).
+- Phases 1–2 in `dev`. **Phase 3 implemented** and committed on `feature/phase-3-inventory-routines` (not merged).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 52 Vitest + 16 Playwright (incl. axe WCAG 2.2 AA), all passing on 2026-11-13.
+- Tests: 65 Vitest + 19 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-13.
+- Local dev DB needs `npm run db:migrate` for the Phase 3 tables (adds tables only).
 
 ## Next steps
-1. Review & commit Phase 2 → merge into `dev` (needs approval).
-2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for medications/calendar/tasks.
-3. Phase 3 (inventory, orders, routines): architect review of the schema first, in a fresh session.
+1. Migrate the local dev DB, click through inventory/orders/routines, then merge Phase 3 into `dev` (needs approval).
+2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
+3. Phase 4 (notifications, automatic tasks, search, insights): architect review first, in a fresh session.
 
 ## Open decisions (need the user)
 - Email provider for invitations (currently dev-only console log).
@@ -20,6 +21,13 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-13: Phase 3 build
+- Decisions: routines reuse the medication schedule rules and maths; stock estimate computed (days left = quantity ÷ daily use; reorder at threshold, 0, or ≤ 7 days); every stock change is a movement row; a delivered order restocks at most once (partial unique index). No pet_id columns (one pet per group).
+- Lesson: same-millisecond rows need a tiebreaker (`rowid`) when history is ordered by `created_at`.
+- Lesson: axe can sample mid colour-transition; `expectNoA11yViolations` now waits for `document.getAnimations()` to be empty.
+- Lesson: the E2E suite outgrew the 20/hour register limit; `REGISTER_RATE_LIMIT` is raised only in the Playwright server env.
+- Agents used: architect (10 findings; rejected pet_id and race items, accepted same-group checks, missed→completed update, URL parsing, rounding) · security-reviewer (no Critical/High; Medium rejected as PRD-allowed; 3 Lows fixed: stock cap, URLs with credentials, group filter) · ui-ux-specialist (no blockers; 5 fixed: labelled end date, "Enough" badge, ₪ currency format, visible new-tab cue, Hebrew wording).
+
 ### 2026-11-13: Phase 2 build
 - Decisions: doses and event occurrences are computed from rules, never stored; only confirmations/statuses are rows. Wall-clock Israel time strings. Reminders = computed "Today" dashboard (no jobs until Phase 4). Calendar = month agenda list.
 - Lesson: E2E helper must wait for a server action to finish before navigating, or the action is cancelled.

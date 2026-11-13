@@ -1,6 +1,6 @@
 import { and, asc, eq, or } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
-import { events, medicationPlans, memberships, taskAssignees, taskTransferRequests, users, type Role } from "../db/schema";
+import { events, medicationPlans, memberships, routines, taskAssignees, taskTransferRequests, users, type Role } from "../db/schema";
 import { audit } from "../audit";
 import { AppError } from "../errors";
 import { countAdmins, requireMembership } from "../permissions";
@@ -57,6 +57,7 @@ async function releaseResponsibilities(tx: Tx, groupId: string, userId: string) 
   await tx.delete(taskAssignees).where(and(eq(taskAssignees.groupId, groupId), eq(taskAssignees.userId, userId)));
   await tx.update(medicationPlans).set({ responsibleUserId: null }).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId)));
   await tx.update(events).set({ assigneeId: null }).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId)));
+  await tx.update(routines).set({ responsibleUserId: null }).where(and(eq(routines.groupId, groupId), eq(routines.responsibleUserId, userId)));
   await tx.update(taskTransferRequests).set({ status: "rejected", decidedAt: new Date() }).where(and(
     eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"),
     or(eq(taskTransferRequests.toUserId, userId), eq(taskTransferRequests.requestedById, userId)),
@@ -65,12 +66,13 @@ async function releaseResponsibilities(tx: Tx, groupId: string, userId: string) 
 
 /** What a member is responsible for (shown before leaving/removal). */
 export async function responsibilitiesOf(groupId: string, userId: string) {
-  const [t, p, e] = await Promise.all([
+  const [t, p, e, r] = await Promise.all([
     db.select({ id: taskAssignees.taskId }).from(taskAssignees).where(and(eq(taskAssignees.groupId, groupId), eq(taskAssignees.userId, userId))),
     db.select({ id: medicationPlans.id }).from(medicationPlans).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId))),
     db.select({ id: events.id }).from(events).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId))),
+    db.select({ id: routines.id }).from(routines).where(and(eq(routines.groupId, groupId), eq(routines.responsibleUserId, userId))),
   ]);
-  return { tasks: t.length, plans: p.length, events: e.length };
+  return { tasks: t.length, plans: p.length, events: e.length, routines: r.length };
 }
 
 export async function leaveGroup(userId: string, groupId: string) {

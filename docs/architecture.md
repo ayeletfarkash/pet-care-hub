@@ -79,5 +79,21 @@ Rules added in Phase 2:
 
 Deliberately not in Phase 2: notification recipients, reminder offsets, participants (Phase 4); medication inventory (Phase 3); automatic task creation (Phase 4); plan versioning (editing a plan's times re-computes past doses; existing administrations stay in history).
 
+## Phase 3: inventory and routines
+| Module | Tables | Notes |
+|---|---|---|
+| Inventory | `inventory_items`, `inventory_movements` | Both roles change quantities (use, purchase, counted quantity, ran out); Admins add/edit/delete products. Every change writes a movement (delta + quantity after), so purchase/use history is complete. Quantities never go below 0 and are rounded to 3 decimals. Optional link to a medication plan (PRD §6.5) |
+| Stock estimate | none | Computed (`stockStatus` in `schedule.ts`): days left = quantity ÷ estimated daily use; reorder when at/below the user's threshold, at 0, or ≤ 7 days left (`REORDER_LEAD_DAYS`) |
+| Orders | `orders` | Both roles create orders and change status; Admins edit details/delete. URLs must parse as absolute http(s) and render with `rel="noopener noreferrer nofollow"`. Marking delivered can add the order quantity to the linked item, at most once (partial `UNIQUE(order_id)` on movements); changing the status back never removes stock |
+| Routines | `routines`, `routine_logs` | Same schedule columns and maths as medication plans (shared `scheduleShape` / `ScheduleFields`). Activities are computed; a log row records completed or missed. Re-logging the same activity updates it (missed → completed). Extra activities have no scheduled time and are always "completed". Caregivers log ≤ 48 h back; Admins remove logs. Routines with logs are ended, not deleted |
+
+Rules added in Phase 3:
+- The pet is implicit (one pet per group), so no `pet_id` columns.
+- Linked ids (item, plan) are checked to be in the same group (`invalid_reference`).
+- Dashboard "Today" adds my routine activities and items running low.
+- Leaving/removal also releases routine responsibility.
+
+Deliberately not in Phase 3: reminder recipients for routines (Phase 4 notifications) · automatic reorder tasks (Phase 4) · deducting stock automatically when a dose is given · currency other than ₪.
+
 ## Deferred (later phases / decisions needed)
 Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · notification preferences (Phase 4) · CSP header · persistent rate limiting.

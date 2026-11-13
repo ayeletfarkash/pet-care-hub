@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 const PORT = 3100;
 // Isolated DB + uploads for E2E; wiped on every run by e2e/server.mjs.
-const env = { DATABASE_URL: "file:./data/e2e/app.db", UPLOAD_DIR: "./data/e2e/uploads", NEXT_TELEMETRY_DISABLED: "1" };
+const env = { DATABASE_URL: "file:./data/e2e/app.db", UPLOAD_DIR: "./data/e2e/uploads", NEXT_TELEMETRY_DISABLED: "1", REGISTER_RATE_LIMIT: "200" };
 
 export default defineConfig({
   testDir: "./e2e",
