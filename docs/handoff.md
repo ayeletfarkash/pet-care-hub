@@ -3,13 +3,13 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–2 in `dev`. **Phase 3 implemented** and committed on `feature/phase-3-inventory-routines` (not merged).
+- Phases 1–3 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
 - Tests: 65 Vitest + 19 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-13.
-- Local dev DB needs `npm run db:migrate` for the Phase 3 tables (adds tables only).
+- Local dev DB migrated for Phase 3 (backup: `data/app.db.bak-pre-phase3`).
 
 ## Next steps
-1. Migrate the local dev DB, click through inventory/orders/routines, then merge Phase 3 into `dev` (needs approval).
+1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
 3. Phase 4 (notifications, automatic tasks, search, insights): architect review first, in a fresh session.
 
