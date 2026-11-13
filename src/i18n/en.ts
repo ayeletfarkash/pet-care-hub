@@ -57,7 +57,7 @@ export const en = {
     restore: "Restore {pet}",
     deletedOn: "Deleted on {date}",
     restored: "Group restored.",
-    moreSoon: "Inventory, routines and push notifications will be added in upcoming versions.",
+    moreSoon: "Push notifications and smart reminders will be added in upcoming versions.",
   },
   species: {
     dog: "Dog", cat: "Cat", bird: "Bird", rabbit: "Rabbit", reptile: "Reptile",

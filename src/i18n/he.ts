@@ -59,7 +59,7 @@ export const he: Dict = {
     restore: "שחזור הקבוצה של {pet}",
     deletedOn: "נמחקה בתאריך {date}",
     restored: "הקבוצה שוחזרה.",
-    moreSoon: "מלאי, שגרות והתראות פוש יתווספו בגרסאות הבאות.",
+    moreSoon: "התראות פוש ותזכורות חכמות יתווספו בגרסאות הבאות.",
   },
   species: {
     dog: "כלב", cat: "חתול", bird: "ציפור", rabbit: "ארנב", reptile: "זוחל",
