@@ -1,0 +1,1 @@
+ALTER TABLE `tasks` ADD `recurrence_interval` integer DEFAULT 1 NOT NULL;

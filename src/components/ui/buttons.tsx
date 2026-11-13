@@ -30,6 +30,7 @@ export function SubmitButton({
     <button
       type="submit"
       {...props}
+      aria-label={pending ? undefined : props["aria-label"]}
       aria-disabled={pending || undefined}
       onClick={(e) => pending && e.preventDefault()}
       className={buttonClass(variant, className)}

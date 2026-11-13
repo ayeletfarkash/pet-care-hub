@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { LOCALES, ROLES, SEXES, SPECIES } from "./db/schema";
+import {
+  EVENT_TYPES, LOCALES, MEDICAL_TYPES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
+} from "./db/schema";
+import { isValidTime, todayLocal } from "./schedule";
 
 // Issue messages are i18n keys under `validation.*`.
 const req = (max = 120) => z.string().trim().min(1, "required").max(max, "too_long");
@@ -72,3 +75,107 @@ export const invitationSchema = z.object({
 export type InvitationInput = z.infer<typeof invitationSchema>;
 
 export const roleSchema = z.enum(ROLES);
+
+// ───────────── Phase 2 ─────────────
+const localDateTime = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, "invalid_date")
+  .refine((v) => !Number.isNaN(Date.parse(`${v}:00Z`)), "invalid_date");
+const reqDate = z.string().trim().min(1, "required").refine((v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)), "invalid_date");
+const optUserId = z.string().trim().transform((v) => (v === "" ? null : v)).nullable().optional();
+
+export const medicalRecordSchema = z.object({
+  type: z.enum(MEDICAL_TYPES, { message: "required" }),
+  date: reqDate.refine((v) => v <= todayLocal(), "future_date"),
+  title: req(120),
+  description: opt(2000),
+  provider: opt(),
+  details: opt(2000),
+  notes: opt(2000),
+});
+export type MedicalRecordInput = z.infer<typeof medicalRecordSchema>;
+
+export const medicationPlanSchema = z
+  .object({
+    name: req(120),
+    dosage: req(200),
+    instructions: opt(1000),
+    scheduleType: z.enum(SCHEDULE_TYPES, { message: "required" }),
+    times: z.array(z.string()).default([])
+      .transform((a) => [...new Set(a.map((s) => s.trim()).filter(Boolean))].sort())
+      .refine((a) => a.length >= 1 && a.length <= 6, "times_required")
+      .refine((a) => a.every(isValidTime), "invalid_time"),
+    weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]).transform((a) => [...new Set(a)].sort()),
+    intervalDays: optNumber(365).transform((v) => (v == null ? null : Math.trunc(v))),
+    startDate: reqDate,
+    endDate: isoDate,
+    responsibleUserId: optUserId,
+    notes: opt(1000),
+  })
+  .superRefine((v, ctx) => {
+    if (v.scheduleType === "weekdays" && v.weekdays.length === 0) ctx.addIssue({ code: "custom", path: ["weekdays"], message: "weekdays_required" });
+    if (v.scheduleType === "interval" && (!v.intervalDays || v.intervalDays < 1)) ctx.addIssue({ code: "custom", path: ["intervalDays"], message: "invalid_number" });
+    if (v.endDate && v.endDate < v.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "end_before_start" });
+  })
+  .transform((v) => ({
+    ...v,
+    weekdays: v.scheduleType === "weekdays" ? v.weekdays : [],
+    intervalDays: v.scheduleType === "interval" ? v.intervalDays : null,
+  }));
+export type MedicationPlanInput = z.infer<typeof medicationPlanSchema>;
+
+export const administrationSchema = z.object({
+  planId: z.string().min(1),
+  scheduledFor: localDateTime,
+  notes: opt(500),
+});
+
+export const eventSchema = z
+  .object({
+    type: z.enum(EVENT_TYPES, { message: "required" }),
+    title: req(120),
+    date: reqDate,
+    time: z.string().trim().transform((v) => (v === "" ? null : v)).nullable().optional()
+      .refine((v) => v == null || isValidTime(v), "invalid_time"),
+    location: opt(300),
+    provider: opt(),
+    description: opt(2000),
+    notes: opt(2000),
+    assigneeId: optUserId,
+    recurrence: z.enum(RECURRENCES).catch("none"),
+    recurrenceUntil: isoDate,
+  })
+  .superRefine((v, ctx) => {
+    if (v.recurrenceUntil && v.recurrenceUntil < v.date) ctx.addIssue({ code: "custom", path: ["recurrenceUntil"], message: "end_before_start" });
+  })
+  .transform(({ date, time, ...v }) => ({
+    ...v,
+    allDay: !time,
+    startsAt: `${date}T${time ?? "00:00"}`,
+    recurrenceUntil: v.recurrence === "none" ? null : v.recurrenceUntil ?? null,
+  }));
+export type EventInput = z.infer<typeof eventSchema>;
+
+export const taskSchema = z
+  .object({
+    title: req(160),
+    description: opt(2000),
+    dueDate: isoDate,
+    dueTime: z.string().trim().transform((v) => (v === "" ? null : v)).nullable().optional()
+      .refine((v) => v == null || isValidTime(v), "invalid_time"),
+    priority: z.enum(TASK_PRIORITIES).catch("normal"),
+    recurrence: z.enum(TASK_RECURRENCES).catch("none"),
+    recurrenceInterval: z.string().trim().optional().transform((v) => (v ? Number(v) : 1))
+      .refine((v) => Number.isInteger(v) && v >= 1 && v <= 365, "invalid_number"),
+    assignees: z.array(z.string().min(1)).max(50).default([]),
+  })
+  .superRefine((v, ctx) => {
+    if (v.recurrence !== "none" && !v.dueDate) ctx.addIssue({ code: "custom", path: ["dueDate"], message: "due_required" });
+  })
+  .transform(({ dueDate, dueTime, ...v }) => ({
+    ...v,
+    recurrenceInterval: v.recurrence === "none" ? 1 : v.recurrenceInterval,
+    assignees: [...new Set(v.assignees)],
+    dueAt: dueDate ? `${dueDate}T${dueTime ?? "23:59"}` : null,
+  }));
+export type TaskInput = z.infer<typeof taskSchema>;
+
+export const commentSchema = z.object({ body: req(2000) });

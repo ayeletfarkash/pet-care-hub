@@ -1,6 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
-import { memberships, users, type Role } from "../db/schema";
+import { events, medicationPlans, memberships, taskAssignees, taskTransferRequests, users, type Role } from "../db/schema";
 import { audit } from "../audit";
 import { AppError } from "../errors";
 import { countAdmins, requireMembership } from "../permissions";
@@ -44,9 +44,33 @@ export async function removeMember(actorId: string, groupId: string, targetUserI
     const current = await targetRole(tx, groupId, targetUserId);
     if (current === "admin" && (await countAdmins(tx, groupId)) <= 1) throw new AppError("last_admin");
     await tx.delete(memberships).where(and(eq(memberships.groupId, groupId), eq(memberships.userId, targetUserId)));
+    await releaseResponsibilities(tx, groupId, targetUserId);
     await audit(tx, { groupId, actorId, action: actorId === targetUserId ? "member.left" : "member.removed", targetUserId });
   });
-  // Phase 2+: open tasks/treatments become unassigned here (PRD §4.5); none exist in Phase 1.
+}
+
+/**
+ * PRD §4.5/4.6: when someone leaves or is removed, their open responsibilities in that group become
+ * unassigned (history stays; their other groups are untouched). Runs in the same transaction.
+ */
+async function releaseResponsibilities(tx: Tx, groupId: string, userId: string) {
+  await tx.delete(taskAssignees).where(and(eq(taskAssignees.groupId, groupId), eq(taskAssignees.userId, userId)));
+  await tx.update(medicationPlans).set({ responsibleUserId: null }).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId)));
+  await tx.update(events).set({ assigneeId: null }).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId)));
+  await tx.update(taskTransferRequests).set({ status: "rejected", decidedAt: new Date() }).where(and(
+    eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"),
+    or(eq(taskTransferRequests.toUserId, userId), eq(taskTransferRequests.requestedById, userId)),
+  ));
+}
+
+/** What a member is responsible for (shown before leaving/removal). */
+export async function responsibilitiesOf(groupId: string, userId: string) {
+  const [t, p, e] = await Promise.all([
+    db.select({ id: taskAssignees.taskId }).from(taskAssignees).where(and(eq(taskAssignees.groupId, groupId), eq(taskAssignees.userId, userId))),
+    db.select({ id: medicationPlans.id }).from(medicationPlans).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId))),
+    db.select({ id: events.id }).from(events).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId))),
+  ]);
+  return { tasks: t.length, plans: p.length, events: e.length };
 }
 
 export async function leaveGroup(userId: string, groupId: string) {
@@ -54,6 +78,7 @@ export async function leaveGroup(userId: string, groupId: string) {
     const role = await requireMembership(tx, userId, groupId);
     if (role === "admin" && (await countAdmins(tx, groupId)) <= 1) throw new AppError("last_admin");
     await tx.delete(memberships).where(and(eq(memberships.groupId, groupId), eq(memberships.userId, userId)));
+    await releaseResponsibilities(tx, groupId, userId);
     await audit(tx, { groupId, actorId: userId, action: "member.left", targetUserId: userId });
   });
 }

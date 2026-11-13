@@ -15,6 +15,7 @@ export async function register(page: Page, name: string, email: string, locale: 
   await page.getByLabel(/^Password|^סיסמה/).fill("password123");
   await page.getByLabel(/Preferred language|שפה מועדפת/).selectOption(locale);
   await page.getByRole("button", { name: /Create account|יצירת חשבון/ }).click();
+  await expect(page).not.toHaveURL(/\/register/); // wait for the action; navigating early would cancel it
 }
 
 export async function createPet(page: Page, name: string, species = "dog") {

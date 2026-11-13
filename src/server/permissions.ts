@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Executor } from "./db";
 import { groups, memberships, type Role } from "./db/schema";
 import { AppError } from "./errors";
@@ -38,4 +38,15 @@ export async function countAdmins(ex: Executor, groupId: string): Promise<number
     .from(memberships)
     .where(and(eq(memberships.groupId, groupId), eq(memberships.role, "admin")));
   return rows.length;
+}
+
+/** Users referenced by a record (assignee, responsible person) must be current members of its group. */
+export async function requireMembersOf(ex: Executor, groupId: string, userIds: (string | null | undefined)[]) {
+  const ids = [...new Set(userIds.filter((x): x is string => !!x))];
+  if (ids.length === 0) return;
+  const rows = await ex
+    .select({ userId: memberships.userId })
+    .from(memberships)
+    .where(and(eq(memberships.groupId, groupId), inArray(memberships.userId, ids)));
+  if (rows.length !== ids.length) throw new AppError("invalid_assignee");
 }

@@ -7,6 +7,7 @@ import { Notice } from "@/components/notice";
 import { SpeciesIcon } from "@/components/species-icon";
 import { LinkButton } from "@/components/ui/buttons";
 import { ActionForm } from "@/components/forms/action-form";
+import { groupTaskStats, Today } from "@/components/today";
 import { restoreGroupAction } from "./actions/groups";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string; reason?: string }> }) {
@@ -15,12 +16,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     getT(), searchParams, listUserGroups(user.id), listRestorableGroups(user.id),
   ]);
   const admins = groups.filter((g) => g.role === "admin").length;
+  const stats = await groupTaskStats(groups.map((g) => g.groupId));
 
   return (
     <>
       <Notice t={t} notice={sp.notice} reason={sp.reason} />
       <h1 className="text-3xl font-bold">{fmt(t.dashboard.greeting, { name: user.name })}</h1>
       {groups.length > 0 && <p className="mt-1 text-muted">{fmt(t.dashboard.summary, { count: groups.length, admins })}</p>}
+      {groups.length > 0 && <Today t={t} locale={locale} userId={user.id} groups={groups} />}
 
       <section aria-labelledby="groups-h" className="mt-8">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -51,6 +54,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     {g.species === "other" && g.speciesOther ? g.speciesOther : t.species[g.species]}
                   </p>
                   <p className="mt-1 inline-block rounded-full border border-line px-2 text-sm font-semibold">{t.roles[g.role]}</p>
+                  <p className="mt-1 text-sm">{fmt(t.today.groupStats, { open: stats.get(g.groupId)?.open ?? 0, overdue: stats.get(g.groupId)?.overdue ?? 0 })}</p>
                 </div>
               </li>
             ))}

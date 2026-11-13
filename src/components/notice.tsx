@@ -8,6 +8,7 @@ export function Notice({ t, notice, reason }: { t: Dict; notice?: string; reason
     left: t.group.left,
     group_deleted: t.group.deleted,
     group_restored: t.dashboard.restored,
+    deleted: t.medical.deleted,
     join_failed: fmt(t.join.joinFailed, { reason: t.errors[reason as keyof Dict["errors"]] ?? t.errors.generic }),
   };
   const msg = notice ? messages[notice] : undefined;

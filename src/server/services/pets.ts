@@ -45,7 +45,7 @@ export async function setPetPhoto(userId: string, groupId: string, data: Uint8Ar
   if (!type) throw new AppError("invalid_photo");
   await mkdir(UPLOAD_DIR, { recursive: true });
   const file = `${crypto.randomUUID()}.${type.ext}`;
-  await writeFile(path.join(UPLOAD_DIR, file), data);
+  await writeFile(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, file), data);
   await replacePhoto(userId, groupId, file);
 }
 
@@ -59,10 +59,10 @@ async function replacePhoto(userId: string, groupId: string, file: string | null
     await audit(tx, { groupId, actorId: userId, action: "pet.updated", meta: { photo: file ? "set" : "removed" } });
     return row?.f;
   }).catch(async (e) => {
-    if (file) await unlink(path.join(UPLOAD_DIR, file)).catch(() => {}); // don't leave an orphan upload
+    if (file) await unlink(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, file)).catch(() => {}); // don't leave an orphan upload
     throw e;
   });
-  if (old) await unlink(path.join(UPLOAD_DIR, old)).catch(() => {});
+  if (old) await unlink(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, old)).catch(() => {});
 }
 
 /** Returns photo bytes only to members of the pet's group. */
@@ -70,5 +70,5 @@ export async function readPetPhoto(userId: string, groupId: string) {
   await requireMembership(db, userId, groupId);
   const row = await db.select({ f: pets.photoFile }).from(pets).where(eq(pets.groupId, groupId)).get();
   if (!row?.f || !/^[0-9a-f-]{36}\.(jpg|png|webp)$/.test(row.f)) throw new AppError("not_found");
-  return { data: await readFile(path.join(UPLOAD_DIR, row.f)), mime: MIME_BY_EXT[row.f.split(".")[1]] };
+  return { data: await readFile(path.join(/*turbopackIgnore: true*/ UPLOAD_DIR, row.f)), mime: MIME_BY_EXT[row.f.split(".")[1]] };
 }

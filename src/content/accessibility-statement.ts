@@ -1,7 +1,7 @@
 import type { Locale } from "@/server/db/schema";
 
 // PRD §20: claim only what is implemented and tested; update on every accessibility change.
-export const STATEMENT_UPDATED = "2026-11-12";
+export const STATEMENT_UPDATED = "2026-11-13";
 
 type Statement = {
   title: string;
@@ -32,11 +32,14 @@ export const statement: Record<Locale, Statement> = {
       "Respect for the operating system's reduced-motion preference.",
       "Full Hebrew (right-to-left) and English (left-to-right) interfaces. Email addresses and phone numbers keep their reading direction.",
       "Responsive layout for mobile, tablet and desktop, with touch targets of at least 44 pixels.",
+      "The calendar is presented as a day-by-day list with headings, which works with screen readers and on small screens.",
+      "Statuses (dose given, task overdue, event cancelled) are shown with text and an icon, not colour alone. Results of quick actions are announced to screen readers.",
     ],
     testingH: "How we tested",
     testing: [
       "Automated accessibility checks (axe-core, WCAG 2.2 A/AA rules) on the main pages in Hebrew and English.",
       "Automated keyboard-only tests of registration, login, creating a pet and the accessibility toolbar.",
+      "Automated accessibility checks of the medical history, medications, calendar and task pages in Hebrew and English.",
     ],
     limitationsH: "Known limitations",
     limitations: [
@@ -67,11 +70,14 @@ export const statement: Record<Locale, Statement> = {
       "כיבוד העדפת \"הפחתת תנועה\" של מערכת ההפעלה.",
       "ממשק מלא בעברית (מימין לשמאל) ובאנגלית (משמאל לימין). כתובות דוא\"ל ומספרי טלפון נשמרים בכיוון הקריאה הנכון.",
       "תצוגה מותאמת לנייד, לטאבלט ולמחשב, עם אזורי לחיצה בגודל 44 פיקסלים לפחות.",
+      "לוח השנה מוצג כרשימה לפי ימים עם כותרות, המתאימה לקוראי מסך ולמסכים קטנים.",
+      "סטטוסים (מנה ניתנה, משימה באיחור, אירוע בוטל) מוצגים בטקסט ובסמל, לא בצבע בלבד. תוצאות של פעולות מהירות מוקראות לקוראי מסך.",
     ],
     testingH: "כיצד בדקנו",
     testing: [
       "בדיקות נגישות אוטומטיות (axe-core, כללי WCAG 2.2 A/AA) בעמודים המרכזיים, בעברית ובאנגלית.",
       "בדיקות אוטומטיות של שימוש במקלדת בלבד: הרשמה, התחברות, יצירת חיית מחמד וסרגל הנגישות.",
+      "בדיקות נגישות אוטומטיות של עמודי ההיסטוריה הרפואית, התרופות, לוח השנה והמשימות, בעברית ובאנגלית.",
     ],
     limitationsH: "מגבלות ידועות",
     limitations: [

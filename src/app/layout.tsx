@@ -8,6 +8,7 @@ import { getT } from "@/i18n/server";
 import { A11yToolbar } from "@/components/a11y-toolbar";
 import { LanguageSwitch } from "@/components/language-switch";
 import { NavLink } from "@/components/nav-link";
+import { LiveRegion } from "@/components/live-region";
 import { logoutAction } from "./actions/auth";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -65,6 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </nav>
           </div>
         </header>
+        <LiveRegion />
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
           {children}
         </main>

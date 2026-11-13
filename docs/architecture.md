@@ -58,5 +58,26 @@ Limitation: single server process only. Multi-instance hosting → move to Postg
 ## Files
 Pet photos: magic-byte check (JPEG/PNG/WebP), 5 MB cap, generated filename under `UPLOAD_DIR` (outside `public/`), served by `/groups/<id>/photo` after a membership check with `nosniff` + `private, no-store`.
 
+## Phase 2: daily care
+| Module | Tables | Notes |
+|---|---|---|
+| Medical | `medical_records`, `attachments` | Both roles add records/documents; Admins edit/delete. Files: magic-byte check (PDF/JPG/PNG/WebP), 10 MB, removed from disk with their rows; served by `/groups/<id>/attachments/<aid>` |
+| Medications | `medication_plans`, `medication_administrations` | **Doses are computed** from the plan (`schedule.ts`), never stored. An administration row (unique per plan + scheduled time) is the only proof a dose was given. A dose may be confirmed ≤ 60 min early; Caregivers can record doses up to 48 h back, older ones need an Admin. Plans with history can be ended, not deleted |
+| Events | `events`, `event_occurrence_status` | Occurrences computed from a recurrence rule; completed/cancelled stored per occurrence and validated against the rule |
+| Tasks | `tasks`, `task_assignees`, `task_comments`, `task_history`, `task_transfer_requests` | Overdue is computed. Recurring tasks need a due date; completing one inserts the next instance (`UNIQUE(series_id, due_at)` makes it idempotent); cancelling ends the series. One pending transfer per task (partial unique index) |
+| Reminders | none | "Today" on the dashboard is computed per request: my doses, my tasks, next 7 days, approvals. No notification table or jobs until Phase 4 |
+
+Rules added in Phase 2:
+- **Times** are wall-clock strings in Israel time (`YYYY-MM-DDTHH:mm`); all maths in `src/server/schedule.ts` (unit-tested incl. DST, month-end clamping, Feb 29).
+- Every Phase 2 table has `group_id`; child rows are always read/written with a `group_id` filter. User references (assignee, responsible person) must be current members (`requireMembersOf`).
+- Leaving/removal (`members.ts → releaseResponsibilities`) unassigns open tasks, plan responsibility and event assignments in that group, in the same transaction.
+- "Created/given by" columns are `ON DELETE SET NULL` and render as "former member".
+- Success messages from controls that disappear after acting go to one app-wide live region (`components/live-region.tsx`).
+
+- After a one-button action removes its own button (complete, mark given), focus moves to the next item or the section heading (`forms/action-form.tsx`).
+- Completed tasks can be reopened by either role (undo a mis-tap); cancelling stays Admin-only.
+
+Deliberately not in Phase 2: notification recipients, reminder offsets, participants (Phase 4); medication inventory (Phase 3); automatic task creation (Phase 4); plan versioning (editing a plan's times re-computes past doses; existing administrations stay in history).
+
 ## Deferred (later phases / decisions needed)
-Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · notification preferences (Phase 4) · CSP header · persistent rate limiting.
+Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · notification preferences (Phase 4) · CSP header · persistent rate limiting.

@@ -1,7 +1,7 @@
 import { and, eq, isNull, lt } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { accessibilityPreferences, sessions, users, type Locale } from "../db/schema";
-import { AppError } from "../errors";
+import { AppError, isUniqueViolation } from "../errors";
 import { getDummyHash, hashPassword, verifyPassword } from "../auth/password";
 import { rateLimit } from "../rate-limit";
 
@@ -29,7 +29,7 @@ export async function registerUser(input: { name: string; email: string; passwor
     );
     return user;
   } catch (e) {
-    if (String(e).includes("UNIQUE")) throw new AppError("email_taken"); // concurrent registration
+    if (isUniqueViolation(e)) throw new AppError("email_taken"); // concurrent registration
     throw e;
   }
 }

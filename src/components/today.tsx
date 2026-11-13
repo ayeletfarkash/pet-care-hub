@@ -1,0 +1,103 @@
+import Link from "next/link";
+import { inArray } from "drizzle-orm";
+import { db } from "@/server/db";
+import { tasks as tasksTable, type Locale } from "@/server/db/schema";
+import { dosesForGroups } from "@/server/services/medications";
+import { occurrencesForGroups } from "@/server/services/events";
+import { openTasksForGroups, pendingTransfers } from "@/server/services/tasks";
+import { addDays, todayLocal } from "@/server/schedule";
+import { fmt, formatDate, formatLocalDateTime, type Dict } from "@/i18n";
+import { dueText } from "@/app/groups/[groupId]/tasks/due";
+import { Badge, DoseItem } from "./care";
+
+type G = { groupId: string; petName: string; role: "admin" | "caregiver" };
+
+/**
+ * Basic reminders (PRD Phase 2, §15.3), computed on each visit: the user's doses today, their open
+ * tasks, the coming week, and handovers awaiting their approval. `groups` are the user's own groups.
+ */
+export async function Today({ t, locale, userId, groups }: { t: Dict; locale: Locale; userId: string; groups: G[] }) {
+  const ids = groups.map((g) => g.groupId);
+  const adminIds = groups.filter((g) => g.role === "admin").map((g) => g.groupId);
+  const today = todayLocal();
+  const [doses, myTasks, upcoming, pending] = await Promise.all([
+    dosesForGroups(ids, today, today, { responsibleUserId: userId }),
+    openTasksForGroups(ids, { assignedTo: userId }),
+    occurrencesForGroups(ids, today, addDays(today, 7)),
+    pendingTransfers(adminIds),
+  ]);
+  const pendingTitles = pending.length
+    ? new Map((await db.select({ id: tasksTable.id, title: tasksTable.title }).from(tasksTable).where(inArray(tasksTable.id, pending.map((p) => p.taskId)))).map((r) => [r.id, r.title]))
+    : new Map<string, string>();
+  const pet = (gid: string) => groups.find((g) => g.groupId === gid)?.petName ?? "";
+  const s = t.today;
+  const box = "card rounded-xl border-2 border-divider bg-surface p-4";
+
+  return (
+    <section aria-labelledby="today-h" className="mt-8">
+      <h2 id="today-h" className="mb-3 text-2xl font-bold">{s.title}</h2>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {pending.length > 0 && (
+          <section aria-labelledby="approvals-h" className={`${box} lg:col-span-2`}>
+            <h3 id="approvals-h" className="mb-2 text-lg font-bold">{s.approvals}</h3>
+            <ul className="space-y-1">
+              {pending.map((p) => (
+                <li key={p.taskId}>
+                  <Link href={`/groups/${p.groupId}/tasks/${p.taskId}`}>{fmt(s.approvalItem, { title: pendingTitles.get(p.taskId) ?? "" })}</Link>
+                  <span className="text-muted"> · {pet(p.groupId)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <section aria-labelledby="mydoses-h" className={box}>
+          <h3 id="mydoses-h" className="mb-2 text-lg font-bold">{s.myDoses}</h3>
+          {doses.length === 0 ? <p className="text-muted">{s.noMyDoses}</p> : (
+            <ul className="space-y-2">{doses.map((d) => <DoseItem key={d.planId + d.scheduledFor} t={t} locale={locale} dose={d} petName={pet(d.groupId)} />)}</ul>
+          )}
+        </section>
+        <section aria-labelledby="mytasks-h" className={box}>
+          <h3 id="mytasks-h" className="mb-2 text-lg font-bold">{s.myTasks}</h3>
+          {myTasks.length === 0 ? <p className="text-muted">{s.noMyTasks}</p> : (
+            <ul className="space-y-2">
+              {myTasks.slice(0, 10).map((x) => (
+                <li key={x.id}>
+                  <Link href={`/groups/${x.groupId}/tasks/${x.id}`} className="font-semibold">{x.title}</Link>
+                  <span className="text-sm text-muted"> · {pet(x.groupId)} · {dueText(t, locale, x.dueAt)}</span>
+                  {x.overdue && <> <Badge tone="danger">{t.tasks.overdue}</Badge></>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section aria-labelledby="upcoming-h" className={`${box} lg:col-span-2`}>
+          <h3 id="upcoming-h" className="mb-2 text-lg font-bold">{s.upcoming}</h3>
+          {upcoming.filter((o) => o.status === "scheduled").length === 0 ? <p className="text-muted">{s.noUpcoming}</p> : (
+            <ul className="space-y-1">
+              {upcoming.filter((o) => o.status === "scheduled").slice(0, 12).map((o) => (
+                <li key={o.eventId + o.at}>
+                  <span className="ltr-value">{o.allDay ? formatDate(locale, o.at.slice(0, 10)) : formatLocalDateTime(locale, o.at)}</span>
+                  {" · "}<Link href={`/groups/${o.groupId}/events/${o.eventId}`} className="font-semibold">{o.title}</Link>
+                  <span className="text-sm text-muted"> · {pet(o.groupId)} · {t.events.types[o.type]}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+}
+
+/** Per-group task counts for the pet cards. */
+export async function groupTaskStats(groupIds: string[]) {
+  const open = await openTasksForGroups(groupIds);
+  const stats = new Map<string, { open: number; overdue: number }>();
+  for (const x of open) {
+    const s = stats.get(x.groupId) ?? { open: 0, overdue: 0 };
+    s.open++;
+    if (x.overdue) s.overdue++;
+    stats.set(x.groupId, s);
+  }
+  return stats;
+}
