@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMonthsClamped, isScheduledDose, medicationDoses, monthRange, nextOccurrence, nowLocal, occurrences, shiftMonth,
+  addMonthsClamped, isScheduledDose, medicationDoses, monthRange, nextOccurrence, nowLocal, occurrences, shiftMonth, stockStatus,
   type MedicationSchedule,
 } from "./schedule";
 
@@ -74,5 +74,18 @@ describe("helpers", () => {
     expect(addMonthsClamped("2026-12-15", 1)).toBe("2027-01-15");
     expect(monthRange("2028-02")).toEqual({ from: "2028-02-01", to: "2028-02-29" });
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+  });
+});
+
+describe("stockStatus", () => {
+  const s = (quantity: number, dailyUsage: number | null, lowStockThreshold: number | null = null) => stockStatus({ quantity, dailyUsage, lowStockThreshold }, "2026-02-25");
+  it("estimates days left and the run-out date (crossing month end)", () => {
+    expect(s(10, 2.5)).toMatchObject({ daysLeft: 4, runOutDate: "2026-03-01", needsReorder: true });
+    expect(s(30, 1)).toMatchObject({ daysLeft: 30, needsReorder: false });
+  });
+  it("without a usage rate there is no estimate; threshold and zero still trigger reorder", () => {
+    expect(s(5, null)).toMatchObject({ daysLeft: null, runOutDate: null, needsReorder: false });
+    expect(s(5, 0, 5).needsReorder).toBe(true);
+    expect(s(0, null)).toMatchObject({ depleted: true, needsReorder: true });
   });
 });

@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { fmt, formatLocalDateTime, formatLocalTime, type Dict } from "@/i18n";
+import { fmt, formatLocalDateTime, formatLocalTime, formatNumber, type Dict } from "@/i18n";
 import type { Locale } from "@/server/db/schema";
 import type { Dose } from "@/server/services/medications";
+import type { Activity } from "@/server/services/routines";
 import { markDoseAction } from "@/app/actions/medications";
+import { logActivityAction } from "@/app/actions/routines";
 import { ActionForm } from "./forms/action-form";
 
 type Tone = "neutral" | "success" | "danger" | "info";
@@ -70,3 +72,47 @@ export function SectionHeader({ id, title, action, as: H = "h2" }: { id: string;
 export const Empty = ({ children }: { children: React.ReactNode }) => (
   <p className="rounded-xl border-2 border-dashed border-line bg-surface p-5">{children}</p>
 );
+
+// ─────────── Phase 3 ───────────
+/** "2.5 kg" in the user's number format. */
+/** Prices are stored in shekels (PRD §9.5: no other currencies). */
+export const priceText = (locale: Locale, n: number) => new Intl.NumberFormat(locale === "he" ? "he-IL" : "en-IL", { style: "currency", currency: "ILS" }).format(n);
+export const qtyText = (locale: Locale, q: number, unit: string | null) => `${formatNumber(locale, q)}${unit ? ` ${unit}` : ""}`;
+
+export function StockBadge({ t, item }: { t: Dict; item: { depleted: boolean; needsReorder: boolean } }) {
+  const k = t.inventory;
+  return item.depleted ? <Badge tone="danger">{k.depleted}</Badge> : item.needsReorder ? <Badge tone="danger">{k.reorder}</Badge> : <Badge tone="success">{k.ok}</Badge>;
+}
+
+export const activityTone: Record<Activity["status"], Tone> = { completed: "success", missed: "danger", not_logged: "danger", due: "info", upcoming: "neutral" };
+
+/** One scheduled routine activity with its status and "done" / "missed" buttons while it can be logged. */
+export function ActivityItem({ t, locale, a, showDate, petName }: { t: Dict; locale: Locale; a: Activity; showDate?: boolean; petName?: string }) {
+  const r = t.routines;
+  const when = showDate ? formatLocalDateTime(locale, a.scheduledFor) : formatLocalTime(locale, a.scheduledFor);
+  const fields = { groupId: a.groupId, routineId: a.routineId, scheduledFor: a.scheduledFor };
+  const ctx = petName ? `, ${petName}` : "";
+  return (
+    <li className="card flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-divider bg-surface p-3">
+      <div className="min-w-0">
+        <p className="font-bold">
+          <span className="ltr-value">{when}</span> · {a.name}
+          {petName && <span className="font-normal text-muted"> · {petName}</span>}
+        </p>
+        <p className="mt-1"><Badge tone={activityTone[a.status]}>{r.status[a.status]}</Badge></p>
+        {a.log && <p className="mt-1 text-sm text-muted">{fmt(r.loggedBy, { name: a.log.byName ?? t.ui.formerMember, time: formatLocalDateTime(locale, a.log.at) })}</p>}
+      </div>
+      {a.status !== "completed" && a.status !== "upcoming" && (
+        <div className="flex flex-wrap gap-2">
+          <ActionForm action={logActivityAction} fields={{ ...fields, status: "completed" }} label={r.markDone}
+            ariaLabel={fmt(r.markDoneLabel, { name: a.name, time: when }) + ctx} pendingLabel={t.common.saving} variant="primary" />
+          {a.status !== "missed" && (
+            <ActionForm action={logActivityAction} fields={{ ...fields, status: "missed" }} label={r.markMissed}
+              ariaLabel={fmt(r.markMissedLabel, { name: a.name, time: when }) + ctx} pendingLabel={t.common.saving} variant="secondary" />
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+export const orderTone = { ordered: "info", processing: "info", shipped: "info", delivered: "success", cancelled: "neutral" } as const satisfies Record<string, Tone>;

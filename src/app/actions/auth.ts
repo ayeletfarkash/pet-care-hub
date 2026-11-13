@@ -14,7 +14,7 @@ import { INVITE_COOKIE } from "./invite-cookie";
 
 export async function registerAction(_: FormState, fd: FormData): Promise<FormState> {
   return handleForm(fd, registerSchema, async (input) => {
-    rateLimit(`register:${await clientKey()}`, 20, 60 * 60_000); // scrypt is expensive; also slows email probing
+    rateLimit(`register:${await clientKey()}`, Number(process.env.REGISTER_RATE_LIMIT) || 20, 60 * 60_000); // scrypt is expensive; also slows email probing. Raised only for E2E
     const user = await registerUser(input);
     await createSession(user.id);
     const jar = await cookies();

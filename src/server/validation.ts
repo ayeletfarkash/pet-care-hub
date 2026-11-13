@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  EVENT_TYPES, LOCALES, MEDICAL_TYPES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
+  EVENT_TYPES, INVENTORY_TYPES, LOCALES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
 } from "./db/schema";
 import { isValidTime, todayLocal } from "./schedule";
 
@@ -93,33 +93,33 @@ export const medicalRecordSchema = z.object({
 });
 export type MedicalRecordInput = z.infer<typeof medicalRecordSchema>;
 
-export const medicationPlanSchema = z
-  .object({
-    name: req(120),
-    dosage: req(200),
-    instructions: opt(1000),
-    scheduleType: z.enum(SCHEDULE_TYPES, { message: "required" }),
-    times: z.array(z.string()).default([])
-      .transform((a) => [...new Set(a.map((s) => s.trim()).filter(Boolean))].sort())
-      .refine((a) => a.length >= 1 && a.length <= 6, "times_required")
-      .refine((a) => a.every(isValidTime), "invalid_time"),
-    weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]).transform((a) => [...new Set(a)].sort()),
-    intervalDays: optNumber(365).transform((v) => (v == null ? null : Math.trunc(v))),
-    startDate: reqDate,
-    endDate: isoDate,
-    responsibleUserId: optUserId,
-    notes: opt(1000),
-  })
-  .superRefine((v, ctx) => {
-    if (v.scheduleType === "weekdays" && v.weekdays.length === 0) ctx.addIssue({ code: "custom", path: ["weekdays"], message: "weekdays_required" });
-    if (v.scheduleType === "interval" && (!v.intervalDays || v.intervalDays < 1)) ctx.addIssue({ code: "custom", path: ["intervalDays"], message: "invalid_number" });
-    if (v.endDate && v.endDate < v.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "end_before_start" });
-  })
-  .transform((v) => ({
-    ...v,
-    weekdays: v.scheduleType === "weekdays" ? v.weekdays : [],
-    intervalDays: v.scheduleType === "interval" ? v.intervalDays : null,
-  }));
+/** Schedule fields shared by medication plans and routines (daily / weekdays / every N days, 1–6 times). */
+const scheduleShape = {
+  scheduleType: z.enum(SCHEDULE_TYPES, { message: "required" }),
+  times: z.array(z.string()).default([])
+    .transform((a) => [...new Set(a.map((s) => s.trim()).filter(Boolean))].sort())
+    .refine((a) => a.length >= 1 && a.length <= 6, "times_required")
+    .refine((a) => a.every(isValidTime), "invalid_time"),
+  weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]).transform((a) => [...new Set(a)].sort()),
+  intervalDays: optNumber(365).transform((v) => (v == null ? null : Math.trunc(v))),
+  startDate: reqDate,
+  endDate: isoDate,
+  responsibleUserId: optUserId,
+};
+type ScheduleIn = { scheduleType: (typeof SCHEDULE_TYPES)[number]; weekdays: number[]; intervalDays: number | null; startDate: string; endDate?: string | null };
+const checkSchedule = (v: ScheduleIn, ctx: z.RefinementCtx) => {
+  if (v.scheduleType === "weekdays" && v.weekdays.length === 0) ctx.addIssue({ code: "custom", path: ["weekdays"], message: "weekdays_required" });
+  if (v.scheduleType === "interval" && (!v.intervalDays || v.intervalDays < 1)) ctx.addIssue({ code: "custom", path: ["intervalDays"], message: "invalid_number" });
+  if (v.endDate && v.endDate < v.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "end_before_start" });
+};
+const normalizeSchedule = <V extends ScheduleIn>(v: V) => ({
+  ...v,
+  weekdays: v.scheduleType === "weekdays" ? v.weekdays : [],
+  intervalDays: v.scheduleType === "interval" ? v.intervalDays : null,
+});
+
+export const medicationPlanSchema = z.object({ name: req(120), dosage: req(200), instructions: opt(1000), notes: opt(1000), ...scheduleShape })
+  .superRefine(checkSchedule).transform(normalizeSchedule);
 export type MedicationPlanInput = z.infer<typeof medicationPlanSchema>;
 
 export const administrationSchema = z.object({
@@ -179,3 +179,75 @@ export const taskSchema = z
 export type TaskInput = z.infer<typeof taskSchema>;
 
 export const commentSchema = z.object({ body: req(2000) });
+
+// ───────────── Phase 3 ─────────────
+// Quantities are rounded to 3 decimals so REAL drift (0.1 + 0.2) never reaches thresholds.
+export const roundQty = (n: number) => Math.round(n * 1000) / 1000;
+export const MAX_QTY = 1_000_000;
+const qty = (max = 1_000_000) => optNumber(max).transform((v) => (v == null ? null : roundQty(v)));
+const optId = optUserId;
+/** External links are rendered as hrefs: only absolute http(s) URLs, never javascript:/data:. */
+const httpUrl = z.string().trim().max(500, "too_long").transform((v) => (v === "" ? null : v)).nullable().optional()
+  .refine((v) => {
+    if (v == null) return true;
+    try { const u = new URL(v); return (u.protocol === "http:" || u.protocol === "https:") && !u.username && !u.password; } catch { return false; }
+  }, "invalid_url");
+
+export const inventoryItemSchema = z.object({
+  name: req(120),
+  brand: opt(),
+  type: z.enum(INVENTORY_TYPES, { message: "required" }),
+  unit: opt(30),
+  quantity: qty().transform((v) => v ?? 0),
+  packageSize: qty(),
+  dailyUsage: qty(),
+  lowStockThreshold: qty(),
+  vendor: opt(),
+  price: optNumber(1_000_000),
+  purchaseDate: isoDate.refine((v) => v == null || v <= todayLocal(), "future_date"),
+  medicationPlanId: optId,
+  notes: opt(1000),
+});
+export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
+
+/** Both roles: consumption/purchase take an amount, adjustment takes the counted quantity, depleted none. */
+export const stockChangeSchema = z
+  .object({ kind: z.enum(MOVEMENT_KINDS), amount: qty(), note: opt(300) })
+  .superRefine((v, ctx) => {
+    if (v.kind !== "depleted" && v.amount == null) ctx.addIssue({ code: "custom", path: ["amount"], message: "required" });
+    if ((v.kind === "purchase" || v.kind === "consumption") && v.amount === 0) ctx.addIssue({ code: "custom", path: ["amount"], message: "invalid_number" });
+  });
+export type StockChangeInput = z.infer<typeof stockChangeSchema>;
+
+const orderFields = {
+  product: req(160),
+  itemId: optId,
+  vendor: opt(),
+  url: httpUrl,
+  orderDate: reqDate,
+  expectedDelivery: isoDate,
+  price: optNumber(1_000_000),
+  quantity: qty(),
+  notes: opt(1000),
+};
+const deliveryAfterOrder = (v: { orderDate: string; expectedDelivery?: string | null }, ctx: z.RefinementCtx) => {
+  if (v.expectedDelivery && v.expectedDelivery < v.orderDate) ctx.addIssue({ code: "custom", path: ["expectedDelivery"], message: "end_before_start" });
+};
+export const orderSchema = z.object(orderFields).superRefine(deliveryAfterOrder);
+export type OrderInput = z.infer<typeof orderSchema>;
+export const newOrderSchema = z.object({ ...orderFields, status: z.enum(ORDER_STATUSES).catch("ordered") }).superRefine(deliveryAfterOrder);
+export const orderStatusSchema = z.object({
+  status: z.enum(ORDER_STATUSES, { message: "required" }),
+  addToStock: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
+});
+
+export const routineSchema = z.object({ name: req(120), description: opt(1000), ...scheduleShape }).superRefine(checkSchedule).transform(normalizeSchedule);
+export type RoutineInput = z.infer<typeof routineSchema>;
+
+export const routineLogSchema = z.object({
+  routineId: z.string().min(1),
+  scheduledFor: z.string().trim().transform((v) => (v === "" ? null : v)).nullable().optional()
+    .refine((v) => v == null || localDateTime.safeParse(v).success, "invalid_date"),
+  status: z.enum(["completed", "missed"]).catch("completed"),
+  notes: opt(500),
+});

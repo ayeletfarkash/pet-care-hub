@@ -102,3 +102,19 @@ export function monthRange(ym: string): { from: LocalDate; to: LocalDate } {
   return { from: `${ym}-01`, to: `${ym}-${pad(daysInMonth(y, m))}` };
 }
 export const shiftMonth = (ym: string, n: number) => addMonthsClamped(`${ym}-01`, n).slice(0, 7);
+
+export const REORDER_LEAD_DAYS = 7; // reorder reminder when stock is estimated to last a week or less
+
+/**
+ * Stock estimate (PRD §8.4): days left at the estimated daily usage, the run-out date, and whether
+ * to reorder (at/below the user's threshold, or running out within REORDER_LEAD_DAYS).
+ */
+export function stockStatus(i: { quantity: number; dailyUsage: number | null; lowStockThreshold: number | null }, today: LocalDate) {
+  const daysLeft = i.dailyUsage && i.dailyUsage > 0 ? Math.floor(i.quantity / i.dailyUsage) : null;
+  return {
+    daysLeft,
+    runOutDate: daysLeft == null ? null : addDays(today, daysLeft),
+    depleted: i.quantity <= 0,
+    needsReorder: i.quantity <= 0 || (i.lowStockThreshold != null && i.quantity <= i.lowStockThreshold) || (daysLeft != null && daysLeft <= REORDER_LEAD_DAYS),
+  };
+}
