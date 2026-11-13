@@ -25,6 +25,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Decisions: routines reuse the medication schedule rules and maths; stock estimate computed (days left = quantity ÷ daily use; reorder at threshold, 0, or ≤ 7 days); every stock change is a movement row; a delivered order restocks at most once (partial unique index). No pet_id columns (one pet per group).
 - Lesson: same-millisecond rows need a tiebreaker (`rowid`) when history is ordered by `created_at`.
 - Lesson: axe can sample mid colour-transition; `expectNoA11yViolations` now waits for `document.getAnimations()` to be empty.
+- Lesson: a long-running `next dev` can keep a stale export list for a "use client" file; new exports render as undefined (500) until the file is touched or the server restarted. Production build is unaffected.
 - Lesson: the E2E suite outgrew the 20/hour register limit; `REGISTER_RATE_LIMIT` is raised only in the Playwright server env.
 - Agents used: architect (10 findings; rejected pet_id and race items, accepted same-group checks, missed→completed update, URL parsing, rounding) · security-reviewer (no Critical/High; Medium rejected as PRD-allowed; 3 Lows fixed: stock cap, URLs with credentials, group filter) · ui-ux-specialist (no blockers; 5 fixed: labelled end date, "Enough" badge, ₪ currency format, visible new-tab cue, Hebrew wording).
 
