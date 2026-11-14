@@ -53,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {user ? (
                   <>
                     <li><NavLink href="/">{t.nav.dashboard}</NavLink></li>
+                    <li><NavLink href="/search">{t.nav.search}</NavLink></li>
                     <li>
                       <NavLink href="/notifications">
                         {t.nav.notifications}

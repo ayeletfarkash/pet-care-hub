@@ -49,7 +49,7 @@ const describedBy = (name: string, hint?: string, error?: string) =>
 
 export function TextField(
   props: Base & {
-    type?: "text" | "email" | "password" | "date" | "time" | "number" | "tel" | "datetime-local" | "url";
+    type?: "text" | "email" | "password" | "date" | "time" | "number" | "tel" | "datetime-local" | "url" | "search";
     autoComplete?: string;
     dir?: "ltr" | "rtl" | "auto";
     step?: string;

@@ -292,3 +292,20 @@ export const pushSubscriptionSchema = z.object({
   keys: z.object({ p256dh: b64url(200), auth: b64url(100) }),
 });
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
+
+// ───────── Search (PRD §14) ─────────
+export const SEARCH_TYPES = ["pets", "tasks", "events", "medical", "medications", "products", "orders"] as const;
+export type SearchType = (typeof SEARCH_TYPES)[number];
+const optDate = z.string().trim().optional().transform((v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined));
+/** GET parameters: anything malformed is dropped rather than failing the page. */
+export const searchSchema = z.object({
+  q: z.string().trim().max(100).catch(""),
+  type: z.enum(SEARCH_TYPES).optional().catch(undefined),
+  group: z.string().trim().max(64).optional().catch(undefined),
+  status: z.enum(["open", "closed"]).optional().catch(undefined),
+  assignee: z.string().trim().max(64).optional().catch(undefined),
+  from: optDate.catch(undefined),
+  to: optDate.catch(undefined),
+});
+export type SearchInput = z.infer<typeof searchSchema>;
+export const SEARCH_MIN_CHARS = 2;

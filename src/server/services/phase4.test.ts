@@ -16,7 +16,7 @@ import { notifications, pushSubscriptions, taskAssignees, tasks } from "../db/sc
 import { makeGroup, makeUser } from "../../test/factories";
 import { resetRateLimits } from "../rate-limit";
 import { addMinutesLocal, nowLocal } from "../schedule";
-import { eventSchema, inventoryItemSchema, medicationPlanSchema, newOrderSchema, pushSubscriptionSchema, reminderRuleSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
+import { eventSchema, inventoryItemSchema, medicationPlanSchema, newOrderSchema, pushSubscriptionSchema, reminderRuleSchema, searchSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
 import { acceptInvitation, createInvitation } from "./invitations";
 import { leaveGroup, removeMember } from "./members";
 import { createPlan, recordAdministration } from "./medications";
@@ -27,6 +27,7 @@ import { setOccurrenceStatus } from "./events";
 import { changeStock, createItem } from "./inventory";
 import { getNotificationPrefs, getReminderRule, listNotifications, markRead, pendingSnoozes, setNotificationPrefs, setReminderRule, snoozeNotification, unreadCount } from "./notifications";
 import { deliverPush, saveSubscription } from "./push";
+import { searchAll, searchFilterOptions } from "./search";
 import { sweep } from "./reminders";
 
 const code = async (p: Promise<unknown>) => {
@@ -277,5 +278,42 @@ describe("automatic tasks", () => {
     expect(follow[0].title).toBe("מעקב אחרי: Vaccine");
     expect(await autoTasks(s.g, plain)).toHaveLength(0);
     expect(await autoTasks(s.g, cancelled)).toHaveLength(0);
+  });
+});
+
+describe("global search", () => {
+  const find = async (userId: string, params: Record<string, string>) => (await searchAll(userId, searchSchema.parse(params))).results;
+
+  it("finds across types in the user's groups and never in other groups", async () => {
+    const s = await setup();
+    const tag = `zq${crypto.randomUUID().slice(0, 6)}`; // unique per test run (shared test DB)
+    await createTask(s.admin, s.g, task(60, { title: `Buy ${tag} food`, assignees: [s.care] }));
+    await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: `${tag} kibble`, type: "food", quantity: "5" }));
+    await createTask(s.out, s.gOut, task(60, { title: `Secret ${tag}` }));
+    const care = await find(s.care, { q: tag });
+    expect(care.map((r) => r.type).sort()).toEqual(["products", "tasks"]);
+    expect(care.every((r) => r.groupId === s.g)).toBe(true);
+    expect((await find(s.out, { q: tag })).map((r) => r.title)).toEqual([`Secret ${tag}`]);
+    expect(await find(s.out, { q: tag, group: s.g })).toEqual([]); // a foreign group filter can't widen the scope
+    expect((await searchFilterOptions(s.out)).groups.map((g) => g.id)).toEqual([s.gOut]);
+    await removeMember(s.admin, s.g, s.care);
+    expect(await find(s.care, { q: tag })).toEqual([]); // access ends with membership
+  });
+
+  it("applies filters and treats % and _ literally", async () => {
+    const s = await setup();
+    const tag = `zf${crypto.randomUUID().slice(0, 6)}`;
+    const mine = await createTask(s.admin, s.g, task(60, { title: `${tag} walk`, assignees: [s.care] }));
+    const done = await createTask(s.admin, s.g, task(60, { title: `${tag} bath` }));
+    await completeTask(s.admin, s.g, done);
+    expect((await find(s.admin, { q: tag, assignee: s.care })).map((r) => r.id)).toEqual([mine]);
+    expect((await find(s.admin, { q: tag, status: "closed" })).map((r) => r.id)).toEqual([done]);
+    expect((await find(s.admin, { q: tag, type: "products" }))).toEqual([]);
+    expect((await find(s.admin, { q: tag, from: "2000-01-01", to: "2000-01-02" }))).toEqual([]);
+    expect((await find(s.admin, { q: "%" }))).toEqual([]); // no "match everything"
+    expect((await find(s.admin, { q: "a" }))).toEqual([]); // too short
+    await createTask(s.admin, s.g, task(60, { title: `${tag} 100%_done` }));
+    expect((await find(s.admin, { q: "0%_d" })).map((r) => r.title)).toContain(`${tag} 100%_done`);
+    expect(searchSchema.parse({ q: "x".repeat(500), type: "bogus", from: "nope" })).toMatchObject({ type: undefined, from: undefined });
   });
 });

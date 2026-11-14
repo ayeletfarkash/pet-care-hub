@@ -3,9 +3,9 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slices 1–3 of 5 committed.
+- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slices 1–4 of 5 committed.
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 81 Vitest + 21 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Tests: 83 Vitest + 22 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -13,7 +13,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
 3. Try push on a real phone (needs HTTPS hosting or a tunnel; iOS needs the PWA added to the home screen).
-4. Phase 4 remaining slices, one commit each: (4) global search + filters (LIKE, group-scoped, leak test) · (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
+4. Phase 4 last slice: (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
 
 ## Open decisions (need the user)
 - Email provider for invitations (currently dev-only console log).
@@ -23,6 +23,10 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-14: Phase 4 slice 4 (global search)
+- Decisions: LIKE over FTS (small data, Hebrew gains nothing from FTS5 tokenising); scope always from current memberships; generic open/closed status filter; GET form so filters are shareable URLs.
+- Lesson: after a full-page GET, a server-rendered `role="status"` is not announced; focus a summary heading instead (`components/focus-on-load.tsx`).
+- Agents used: security-reviewer (no Critical/High/Medium; rate limit added; assignee/group params only narrow scope, accepted) · ui-ux-specialist (Majors fixed: focused results heading, heading order; link descriptions, hidden separators, Hebrew wording; collapsible filters skipped).
 ### 2026-11-14: Phase 4 slice 3 (automatic tasks)
 - Decisions: generator runs inside the sweep; idempotent via partial unique `source_key`; reorder tasks unassigned, skipped while an order is open; appointment tasks opt-in per event; no dose tasks.
 - Lesson: Next 16 streams `<title>` after the body, so axe could intermittently report `document-title`. `expectNoA11yViolations` now waits for a non-empty title (found by repeating the test 5×).

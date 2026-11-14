@@ -132,5 +132,14 @@ Push is off unless `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set; the inbox is 
 
 Task text is stored, so it is written in the language of the group's first Admin. History shows "Created automatically · Automatic" (actor null).
 
+### Slice 4: global search
+| Piece | Where | Notes |
+|---|---|---|
+| Service | `services/search.ts` | Scope = `listUserGroups(userId)` (current, non-deleted groups), computed server-side; the group filter can only narrow it. Every query has `group_id IN (scope)`. `LIKE %q% ESCAPE` with `\ % _` escaped; min 2 chars, max 100; 20 results per type; 60 searches/min per user. Both roles read everything in their groups, so no per-type role filter |
+| Types | pets, tasks, events, medical, medications, products, orders | Filters: type, pet/group, status (open = open task / upcoming or recurring event / active plan / order in progress), responsible person (tasks, events, plans), date range (due/start/record/order date). A filter drops types it can't apply to |
+| Page | `/search` (GET form in `<search>`, header link) | Filters live in the URL. The result summary is an `<h2>` that receives focus on load (a live region isn't announced after a full page load) |
+
+Known limit: recurring events match on their first date only for the date filter.
+
 ## Deferred (later phases / decisions needed)
 Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

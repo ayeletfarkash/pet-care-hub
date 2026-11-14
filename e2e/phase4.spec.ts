@@ -106,4 +106,35 @@ test.describe("Phase 4 notifications", () => {
     await expect(page.getByText("Created automatically the day before the appointment.")).toBeVisible();
     await expect(page.getByRole("region", { name: "History" })).toContainText("Created automatically · Automatic");
   });
+
+  test("global search finds group data, filters it, and is accessible in both languages", async ({ page }) => {
+    await register(page, "Sam Search", uniqueEmail("p4s"));
+    const groupId = await createPet(page, "Pickles");
+    await page.goto(`/groups/${groupId}/tasks/new`);
+    await page.getByLabel(/^Task/).fill("Trim Pickles nails");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Trim Pickles nails" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Search" }).click();
+    await page.getByRole("searchbox", { name: "Search for" }).fill("pickles");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(page.locator("#search-summary")).toContainText("2 results for");
+    await expect(page.getByRole("heading", { level: 2, name: /Search results: 2 results for/ })).toBeFocused(); // screen readers land on the outcome
+    await expect(page.getByRole("region", { name: /Pets/ }).getByRole("link", { name: "Pickles" })).toBeVisible();
+    await expect(page.getByRole("region", { name: /Tasks/ }).getByRole("link", { name: "Trim Pickles nails" })).toBeVisible();
+    await expectNoA11yViolations(page);
+
+    await page.getByLabel("Status").selectOption("closed");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(page.locator("#search-summary")).toContainText("No results for");
+    await expect(page).toHaveURL(/status=closed/); // filters live in the URL (shareable, back button works)
+
+    await page.goto("/profile");
+    await page.getByLabel("Preferred language").selectOption("he");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.goto("/search?q=pickles");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await expect(page.locator("#search-summary")).toContainText("2 תוצאות");
+    await expectNoA11yViolations(page);
+  });
 });
