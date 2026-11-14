@@ -43,6 +43,13 @@
       "when": 1794645525881,
       "tag": "0005_phase4_push",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794646667235,
+      "tag": "0006_phase4_auto_tasks",
+      "breakpoints": true
     }
   ]
 }

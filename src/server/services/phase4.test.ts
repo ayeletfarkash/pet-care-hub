@@ -12,16 +12,18 @@ vi.mock("web-push", () => ({
 }));
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
-import { notifications, pushSubscriptions } from "../db/schema";
+import { notifications, pushSubscriptions, taskAssignees, tasks } from "../db/schema";
 import { makeGroup, makeUser } from "../../test/factories";
 import { resetRateLimits } from "../rate-limit";
 import { addMinutesLocal, nowLocal } from "../schedule";
-import { eventSchema, inventoryItemSchema, medicationPlanSchema, pushSubscriptionSchema, reminderRuleSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
+import { eventSchema, inventoryItemSchema, medicationPlanSchema, newOrderSchema, pushSubscriptionSchema, reminderRuleSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
 import { acceptInvitation, createInvitation } from "./invitations";
 import { leaveGroup, removeMember } from "./members";
 import { createPlan, recordAdministration } from "./medications";
 import { createEvent } from "./events";
-import { createTask, getTask } from "./tasks";
+import { completeTask, createTask, getTask } from "./tasks";
+import { createOrder } from "./orders";
+import { setOccurrenceStatus } from "./events";
 import { changeStock, createItem } from "./inventory";
 import { getNotificationPrefs, getReminderRule, listNotifications, markRead, pendingSnoozes, setNotificationPrefs, setReminderRule, snoozeNotification, unreadCount } from "./notifications";
 import { deliverPush, saveSubscription } from "./push";
@@ -221,5 +223,59 @@ describe("web push", () => {
     const before = sent.length;
     await deliverPush();
     expect(sent.length).toBe(before); // already pushed
+  });
+});
+
+describe("automatic tasks", () => {
+  const autoTasks = (groupId: string, sourceId: string) =>
+    db.select().from(tasks).where(and(eq(tasks.groupId, groupId), eq(tasks.sourceId, sourceId)));
+
+  it("low stock creates one unassigned reorder task per restock cycle, in the admin's language", async () => {
+    const s = await setup();
+    const item = await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: "Kibble", type: "food", quantity: "1", lowStockThreshold: "2" }));
+    await sweep();
+    await sweep();
+    let rows = await autoTasks(s.g, item);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe("להזמין שוב: Kibble"); // test users are Hebrew
+    expect(rows[0].createdById).toBeNull();
+    expect(await db.select().from(taskAssignees).where(eq(taskAssignees.taskId, rows[0].id))).toHaveLength(0);
+    await completeTask(s.care, s.g, rows[0].id);
+    await sweep();
+    expect(await autoTasks(s.g, item)).toHaveLength(1); // done stays done in the same cycle
+    await changeStock(s.care, s.g, item, stockChangeSchema.parse({ kind: "purchase", amount: "0.5" })); // still low → new cycle
+    await sweep();
+    rows = await autoTasks(s.g, item);
+    expect(rows).toHaveLength(2);
+    expect(await autoTasks(s.gOut, item)).toHaveLength(0);
+  });
+
+  it("skips items that already have an open order", async () => {
+    const s = await setup();
+    const item = await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: "Litter", type: "supplies", quantity: "0" }));
+    await createOrder(s.care, s.g, newOrderSchema.parse({ product: "Litter", itemId: item, orderDate: at(0).date }));
+    await sweep();
+    expect(await autoTasks(s.g, item)).toHaveLength(0);
+  });
+
+  it("creates opt-in prep and follow-up tasks for appointments, once, assigned like the event", async () => {
+    const s = await setup();
+    const ev = (min: number, o = {}) => eventSchema.parse({ type: "vet", title: "Vaccine", date: at(min).date, time: at(min).time, assigneeId: s.care, ...o });
+    const soon = await createEvent(s.admin, s.g, ev(600, { autoPrep: "on", autoFollowup: "on" }));
+    const past = await createEvent(s.admin, s.g, ev(-120, { autoFollowup: "on" }));
+    const plain = await createEvent(s.admin, s.g, ev(600));
+    const cancelled = await createEvent(s.admin, s.g, ev(-60, { autoFollowup: "on" }));
+    await setOccurrenceStatus(s.admin, s.g, cancelled, at(-60).s, "cancelled");
+    await sweep();
+    await sweep();
+    const prep = await autoTasks(s.g, soon);
+    expect(prep.map((x) => x.sourceKey)).toEqual([`event:${soon}:${at(600).s}:prep`]); // follow-up only after it happened
+    expect(prep[0].dueAt).toBe(at(600).s);
+    expect((await db.select().from(taskAssignees).where(eq(taskAssignees.taskId, prep[0].id))).map((a) => a.userId)).toEqual([s.care]);
+    const follow = await autoTasks(s.g, past);
+    expect(follow).toHaveLength(1);
+    expect(follow[0].title).toBe("מעקב אחרי: Vaccine");
+    expect(await autoTasks(s.g, plain)).toHaveLength(0);
+    expect(await autoTasks(s.g, cancelled)).toHaveLength(0);
   });
 });

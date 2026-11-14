@@ -122,5 +122,15 @@ Rules added in slice 1:
 
 Push is off unless `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set; the inbox is always the fallback (PRD §12.3).
 
+### Slice 3: automatic tasks
+| Piece | Where | Notes |
+|---|---|---|
+| Generator | `services/auto-tasks.ts`, run first in every sweep | Tasks get `source_type`/`source_id`/`source_key`; partial `UNIQUE(group_id, source_key)` + `ON CONFLICT DO NOTHING` = created at most once, and a completed/cancelled task is never recreated |
+| Low stock | key `reorder:<item>:<restock cycle>` | Unassigned "Reorder X" task (user decision). Skipped while an order for the item is ordered/processing/shipped or a reorder task is open. A new purchase starts a new cycle |
+| Appointments | opt-in `events.auto_prep` / `auto_followup` (checkboxes on the event form) | Prep task appears up to 1 day before (due at the appointment); follow-up within 1 day after (due end of next day). Assigned to the event's responsible person if still a member. Cancelled occurrences get none |
+| Doses | none | Already computed, shown in Today and reminded; dose tasks would duplicate them |
+
+Task text is stored, so it is written in the language of the group's first Admin. History shows "Created automatically · Automatic" (actor null).
+
 ## Deferred (later phases / decisions needed)
 Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

@@ -200,6 +200,12 @@ export function EventForm({ t, action, hidden, initial, members, submitLabel, to
         </div>
         {hidden.eventId && <p className="text-sm text-muted">{ev.recurringNote}</p>}
       </fieldset>
+      <fieldset className={card}>
+        <legend className={legend}>{ev.autoSection}</legend>
+        <p className="mb-3 text-sm text-muted">{ev.autoHint}</p>
+        <CheckboxField name="autoPrep" label={ev.autoPrep} defaultChecked={v.autoPrep === true || v.autoPrep === "on"} />
+        <CheckboxField name="autoFollowup" label={ev.autoFollowup} defaultChecked={v.autoFollowup === true || v.autoFollowup === "on"} />
+      </fieldset>
       <SubmitButton pendingLabel={t.common.saving}>{submitLabel}</SubmitButton>
     </form>
   );

@@ -105,7 +105,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
         <ol className="space-y-1">
           {history.map((h) => (
             <li key={h.id} className="text-sm">
-              <span className="font-semibold">{k.actions[h.action as keyof typeof k.actions] ?? h.action}</span> · {h.name ?? t.ui.formerMember} · {formatDateTime(locale, h.createdAt)}
+              <span className="font-semibold">{k.actions[h.action as keyof typeof k.actions] ?? h.action}</span> · {h.action === "auto_created" ? k.automatic : h.name ?? t.ui.formerMember} · {formatDateTime(locale, h.createdAt)}
             </li>
           ))}
         </ol>

@@ -228,6 +228,8 @@ export const events = sqliteTable(
     assigneeId: userRef("assignee_id"),
     recurrence: text("recurrence", { enum: RECURRENCES }).notNull().default("none"),
     recurrenceUntil: text("recurrence_until"),
+    autoPrep: integer("auto_prep", { mode: "boolean" }).notNull().default(false), // Phase 4: prep task the day before
+    autoFollowup: integer("auto_followup", { mode: "boolean" }).notNull().default(false), // Phase 4: follow-up task after
     createdById: userRef("created_by_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -269,11 +271,16 @@ export const tasks = sqliteTable(
     completedAt: integer("completed_at", { mode: "timestamp_ms" }),
     completedById: userRef("completed_by_id"),
     createdById: userRef("created_by_id"),
+    // Phase 4 automatic tasks (PRD §10.6): what generated it; source_key makes generation idempotent.
+    sourceType: text("source_type", { enum: ["inventory", "event"] }),
+    sourceId: text("source_id"),
+    sourceKey: text("source_key"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex("tasks_series_due_uq").on(t.seriesId, t.dueAt), // next recurring instance is created at most once
+    uniqueIndex("tasks_source_key_uq").on(t.groupId, t.sourceKey).where(sql`source_key IS NOT NULL`), // each automatic task once
     index("tasks_group_status_due_idx").on(t.groupId, t.status, t.dueAt),
   ],
 );

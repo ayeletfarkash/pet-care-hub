@@ -142,6 +142,8 @@ export const eventSchema = z
     assigneeId: optUserId,
     recurrence: z.enum(RECURRENCES).catch("none"),
     recurrenceUntil: isoDate,
+    autoPrep: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+    autoFollowup: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
   .superRefine((v, ctx) => {
     if (v.recurrenceUntil && v.recurrenceUntil < v.date) ctx.addIssue({ code: "custom", path: ["recurrenceUntil"], message: "end_before_start" });

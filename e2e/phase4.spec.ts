@@ -82,4 +82,28 @@ test.describe("Phase 4 notifications", () => {
     expect((await page.request.get("/pwa-icon/77")).status()).toBe(404);
     expect(await (await page.request.get("/sw.js")).text()).toContain("notificationclick");
   });
+
+  test("an appointment with a prep task opt-in creates the task automatically", async ({ page }) => {
+    await register(page, "Ari Auto", uniqueEmail("p4auto"));
+    const groupId = await createPet(page, "Bo");
+    const when = local(600); // in 10 hours: inside the day-before window
+    await page.goto(`/groups/${groupId}/events/new`);
+    await page.getByLabel(/^Type/).selectOption("vet");
+    await page.getByLabel(/^Title/).fill("Dental cleaning");
+    await page.getByLabel(/^Date/).fill(when.date);
+    await page.getByLabel(/^Time/).fill(when.time);
+    await page.getByLabel("Responsible person").selectOption({ label: "Ari Auto" });
+    await page.getByRole("checkbox", { name: "Create a preparation task the day before" }).check();
+    await expectNoA11yViolations(page);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Dental cleaning" })).toBeVisible();
+
+    await expect(async () => { // created by the sweep that runs on page loads after a write
+      await page.goto(`/groups/${groupId}/tasks`);
+      await expect(page.getByRole("link", { name: "Prepare for: Dental cleaning" })).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 20_000 });
+    await page.getByRole("link", { name: "Prepare for: Dental cleaning" }).click();
+    await expect(page.getByText("Created automatically the day before the appointment.")).toBeVisible();
+    await expect(page.getByRole("region", { name: "History" })).toContainText("Created automatically · Automatic");
+  });
 });

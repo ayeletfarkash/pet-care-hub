@@ -1,14 +1,15 @@
-import { and, count, eq, gte, inArray, isNotNull, isNull, lt, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte } from "drizzle-orm";
 import { db, writeCount, writeTx } from "../db";
 import {
-  groups, inventoryMovements, memberships, notificationPreferences, notifications, pets, reminderRuleRecipients, reminderRules,
+  groups, memberships, notificationPreferences, notifications, pets, reminderRuleRecipients, reminderRules,
   taskAssignees, tasks, type ReminderSource,
 } from "../db/schema";
 import { addDays, addMinutesLocal, nowLocal } from "../schedule";
 import { dosesForGroups } from "./medications";
 import { occurrencesForGroups } from "./events";
 import { activitiesForGroups } from "./routines";
-import { itemsNeedingReorder } from "./inventory";
+import { itemsNeedingReorder, restockCycles } from "./inventory";
+import { generateAutoTasks } from "./auto-tasks";
 import { CATEGORY_OF, DEFAULT_LEAD } from "./notifications";
 import { deliverPush } from "./push";
 
@@ -32,6 +33,7 @@ export async function sweep(now = new Date()): Promise<number> {
   const live = await db.select({ id: groups.id, pet: pets.name }).from(groups).innerJoin(pets, eq(pets.groupId, groups.id)).where(isNull(groups.deletedAt));
   if (live.length === 0) return 0;
   const ids = live.map((g) => g.id), pet = new Map(live.map((g) => [g.id, g.pet]));
+  await generateAutoTasks(ids, now); // first, so a new task can be reminded in this same run
 
   const [members, off, rules] = await Promise.all([
     db.select({ groupId: memberships.groupId, userId: memberships.userId }).from(memberships).where(inArray(memberships.groupId, ids)),
@@ -90,9 +92,7 @@ export async function sweep(now = new Date()): Promise<number> {
   // Low stock: everyone in the group, once per restock cycle (a new purchase starts a new cycle).
   const low = await itemsNeedingReorder(ids);
   if (low.length) {
-    const purchases = new Map((await db.select({ itemId: inventoryMovements.itemId, n: count() }).from(inventoryMovements)
-      .where(and(inArray(inventoryMovements.itemId, low.map((i) => i.id)), eq(inventoryMovements.kind, "purchase")))
-      .groupBy(inventoryMovements.itemId)).map((r) => [r.itemId, r.n]));
+    const purchases = await restockCycles(low.map((i) => i.id));
     for (const i of low) {
       push(i.groupId, membersOf.get(i.groupId) ?? [], {
         sourceType: "inventory", sourceId: i.id, occurrenceKey: `restock:${purchases.get(i.id) ?? 0}`, deliverAt: to, params: { name: i.name, pet: pet.get(i.groupId) ?? "" },
