@@ -137,4 +137,30 @@ test.describe("Phase 4 notifications", () => {
     await expect(page.locator("#search-summary")).toContainText("2 תוצאות");
     await expectNoA11yViolations(page);
   });
+
+  test("dashboard shows insights at a glance, linking to the filtered insights page", async ({ page }) => {
+    await register(page, "Ines Insight", uniqueEmail("p4i"));
+    const groupId = await createPet(page, "Nala");
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "At a glance" })).toContainText("All clear");
+
+    await page.goto(`/groups/${groupId}/inventory/new`);
+    await page.getByLabel(/^Product name/).fill("Salmon kibble");
+    await page.getByLabel(/^Type/).selectOption("food");
+    await page.getByLabel(/^Current quantity/).fill("0");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Salmon kibble" })).toBeVisible();
+
+    await page.goto("/");
+    const glance = page.getByRole("region", { name: "At a glance" });
+    await glance.getByRole("link", { name: "Nala: Out of stock or below the threshold: 1" }).click();
+    await expect(page).toHaveURL(/\/insights\?group=.*category=inventory/);
+    await expect(page.getByLabel("Topic")).toHaveValue("inventory");
+    const card = page.getByRole("region", { name: "Out of stock or below the threshold: 1" });
+    await expect(card.getByRole("link", { name: "Salmon kibble" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Nala" })).not.toContainText("Overdue tasks"); // category filter applied
+    await expectNoA11yViolations(page);
+    await page.goto("/");
+    await expectNoA11yViolations(page);
+  });
 });

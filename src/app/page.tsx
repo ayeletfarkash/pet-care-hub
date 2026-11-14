@@ -8,6 +8,7 @@ import { SpeciesIcon } from "@/components/species-icon";
 import { LinkButton } from "@/components/ui/buttons";
 import { ActionForm } from "@/components/forms/action-form";
 import { groupTaskStats, Today } from "@/components/today";
+import { insightsFor } from "@/server/services/insights";
 import { restoreGroupAction } from "./actions/groups";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string; reason?: string }> }) {
@@ -16,13 +17,34 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     getT(), searchParams, listUserGroups(user.id), listRestorableGroups(user.id),
   ]);
   const admins = groups.filter((g) => g.role === "admin").length;
-  const stats = await groupTaskStats(groups.map((g) => g.groupId));
+  const [stats, insights] = await Promise.all([groupTaskStats(groups.map((g) => g.groupId)), groups.length ? insightsFor(user.id) : []]);
+  // At a glance: only what needs action (upcoming items are already in Today).
+  const attention = insights.filter((i) => ["overdue_tasks", "struggling_series", "low_stock", "running_out", "missed_activities"].includes(i.kind));
+  const petOf = new Map(groups.map((g) => [g.groupId, g.petName]));
 
   return (
     <>
       <Notice t={t} notice={sp.notice} reason={sp.reason} />
       <h1 className="text-3xl font-bold">{fmt(t.dashboard.greeting, { name: user.name })}</h1>
       {groups.length > 0 && <p className="mt-1 text-muted">{fmt(t.dashboard.summary, { count: groups.length, admins })}</p>}
+      {groups.length > 0 && (
+        <section aria-labelledby="glance-h" className="mt-8">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+            <h2 id="glance-h" className="text-2xl font-bold">{t.insights.glance}</h2>
+            <Link href="/insights" className="font-semibold">{t.insights.openAll}</Link>
+          </div>
+          <p className="mb-3 text-muted">{t.insights.glanceIntro}</p>
+          {attention.length === 0 ? <p className="text-muted">{t.insights.glanceNone}</p> : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {attention.map((i) => (
+                <li key={i.groupId + i.kind} className="card rounded-xl border-2 border-divider bg-surface p-3">
+                  <Link href={`/insights?group=${i.groupId}&category=${i.category}`} className="font-semibold">{petOf.get(i.groupId)}: {fmt(t.insights.kinds[i.kind], { count: i.items.length })}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {groups.length > 0 && <Today t={t} locale={locale} userId={user.id} groups={groups} />}
 
       <section aria-labelledby="groups-h" className="mt-8">

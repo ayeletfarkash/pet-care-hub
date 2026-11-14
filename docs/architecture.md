@@ -141,5 +141,14 @@ Task text is stored, so it is written in the language of the group's first Admin
 
 Known limit: recurring events match on their first date only for the date filter.
 
+### Slice 5: insights + improved dashboard
+| Piece | Where | Notes |
+|---|---|---|
+| Rules | `services/insights.ts` | Computed on read from the existing readers (always current, no job). Kinds: overdue / other open tasks, repeating tasks that keep slipping (`isStrugglingSeries`: 3 of the last 5 instances in 4 weeks late, cancelled or overdue), out of stock or at threshold, running out within 7 days, doses in the next 24 h, vet/treatment/lab events in 30 days, events in 7 days, activities not done/logged in 7 days. Facts and counts only, never medical advice. Scope = current memberships; filters only narrow |
+| Page | `/insights` (GET filters: pet, topic) | Text cards per pet (no charts, PRD §18.7). Linked from the dashboard, not the header (header kept short for reflow) |
+| Dashboard | "At a glance" above Today | Only the kinds that need action, each linking to `/insights?group=…&category=…`; link text includes the pet name |
+
+Future AI (PRD §13.4): a new rule only needs to return the same `Insight` shape.
+
 ## Deferred (later phases / decisions needed)
 Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

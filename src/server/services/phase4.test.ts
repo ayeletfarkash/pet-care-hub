@@ -16,6 +16,8 @@ import { notifications, pushSubscriptions, taskAssignees, tasks } from "../db/sc
 import { makeGroup, makeUser } from "../../test/factories";
 import { resetRateLimits } from "../rate-limit";
 import { addMinutesLocal, nowLocal } from "../schedule";
+import { routineSchema } from "../validation";
+import { createRoutine } from "./routines";
 import { eventSchema, inventoryItemSchema, medicationPlanSchema, newOrderSchema, pushSubscriptionSchema, reminderRuleSchema, searchSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
 import { acceptInvitation, createInvitation } from "./invitations";
 import { leaveGroup, removeMember } from "./members";
@@ -28,6 +30,7 @@ import { changeStock, createItem } from "./inventory";
 import { getNotificationPrefs, getReminderRule, listNotifications, markRead, pendingSnoozes, setNotificationPrefs, setReminderRule, snoozeNotification, unreadCount } from "./notifications";
 import { deliverPush, saveSubscription } from "./push";
 import { searchAll, searchFilterOptions } from "./search";
+import { insightsFor, isStrugglingSeries } from "./insights";
 import { sweep } from "./reminders";
 
 const code = async (p: Promise<unknown>) => {
@@ -315,5 +318,37 @@ describe("global search", () => {
     await createTask(s.admin, s.g, task(60, { title: `${tag} 100%_done` }));
     expect((await find(s.admin, { q: "0%_d" })).map((r) => r.title)).toContain(`${tag} 100%_done`);
     expect(searchSchema.parse({ q: "x".repeat(500), type: "bogus", from: "nope" })).toMatchObject({ type: undefined, from: undefined });
+  });
+});
+
+describe("insights", () => {
+  it("flags a repeating task when 3 of its last 5 instances slipped", () => {
+    const now = "2026-06-30T12:00";
+    const at = (d: number, status: string, lateMin: number | null = null) => ({
+      status, dueAt: `2026-06-${String(30 - d).padStart(2, "0")}T09:00`,
+      completedAt: lateMin == null ? null : new Date(Date.parse(`2026-06-${String(30 - d).padStart(2, "0")}T09:00:00+03:00`) + lateMin * 60_000),
+    });
+    expect(isStrugglingSeries([at(1, "completed", -10), at(2, "completed", -5), at(3, "completed", 0), at(4, "cancelled"), at(5, "completed", -1)], now)).toBe(false);
+    expect(isStrugglingSeries([at(1, "new"), at(2, "completed", 120), at(3, "cancelled"), at(4, "completed", -5)], now)).toBe(true);
+    expect(isStrugglingSeries([at(1, "completed", -1), at(2, "completed", -1), at(3, "completed", -1), at(4, "completed", -1), at(5, "completed", -1), at(6, "cancelled"), at(7, "cancelled"), at(8, "cancelled")], now)).toBe(false); // only the last 5 count
+    expect(isStrugglingSeries([at(29, "cancelled"), at(29, "cancelled"), at(29, "cancelled")], now)).toBe(false); // older than 4 weeks
+  });
+
+  it("summarises rules per group, only for the user's groups, and filters by category", async () => {
+    const s = await setup();
+    await createTask(s.admin, s.g, task(-90, { title: "Late one" }));
+    await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: "Food", type: "food", quantity: "0" }));
+    await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: "Treats", type: "treats", quantity: "3", dailyUsage: "1" }));
+    await createRoutine(s.admin, s.g, routineSchema.parse({ name: "Walk", scheduleType: "daily", times: [at(-120).time], startDate: at(-24 * 60 * 2).date }));
+    await createTask(s.out, s.gOut, task(-90, { title: "Theirs" }));
+    const all = await insightsFor(s.care);
+    const kinds = (groupId: string) => all.filter((i) => i.groupId === groupId).map((i) => i.kind);
+    expect(kinds(s.g)).toEqual(expect.arrayContaining(["overdue_tasks", "low_stock", "running_out", "missed_activities"]));
+    expect(all.find((i) => i.kind === "low_stock")?.items.map((x) => x.title)).toEqual(["Food"]);
+    expect(all.find((i) => i.kind === "running_out")?.items.map((x) => x.title)).toEqual(["Treats"]);
+    expect(all.every((i) => i.groupId === s.g)).toBe(true);
+    expect(await insightsFor(s.care, { group: s.gOut })).toEqual([]); // foreign group can't widen scope
+    expect((await insightsFor(s.care, { category: "inventory" })).every((i) => i.category === "inventory")).toBe(true);
+    expect((await insightsFor(s.out)).flatMap((i) => i.items.map((x) => x.title))).not.toContain("Late one");
   });
 });

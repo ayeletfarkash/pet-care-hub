@@ -3,9 +3,9 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slices 1–4 of 5 committed.
+- Phases 1–3 merged into `dev` (not pushed). Phase 4 complete on `feature/phase-4-notifications` (5 slice commits), not yet merged into `dev`.
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 83 Vitest + 22 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Tests: 85 Vitest + 23 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -13,7 +13,8 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
 3. Try push on a real phone (needs HTTPS hosting or a tunnel; iOS needs the PWA added to the home screen).
-4. Phase 4 last slice: (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
+4. Merge `feature/phase-4-notifications` into `dev` (ask first), then manual checks: screen reader on Notifications/Search/Insights, header at 320 px / 200% text / Hebrew.
+5. Phase 5 (future expansion) only after the Phase 4 acceptance criteria are confirmed in the browser.
 
 ## Open decisions (need the user)
 - Email provider for invitations (currently dev-only console log).
@@ -23,6 +24,10 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-14: Phase 4 slice 5 (insights + dashboard) — Phase 4 complete
+- Decisions: insights computed on read; "keeps slipping" = 3 of last 5 instances in 4 weeks; dashboard shows only actionable kinds; no Insights header link (reflow).
+- Agents used: ui-ux-specialist (Majors fixed: header crowding, glance link names include the pet, unused intro shown; fieldset/legend, "Apply filters", filtered empty state, full lists on the insights page, Hebrew labels).
+- Phase 4 acceptance: preferences, recipients, snooze, search isolation, rule-based insights, duplicate-free auto tasks are covered by tests; assistive-technology behaviour still needs a manual screen-reader pass.
 ### 2026-11-14: Phase 4 slice 4 (global search)
 - Decisions: LIKE over FTS (small data, Hebrew gains nothing from FTS5 tokenising); scope always from current memberships; generic open/closed status filter; GET form so filters are shareable URLs.
 - Lesson: after a full-page GET, a server-rendered `role="status"` is not announced; focus a summary heading instead (`components/focus-on-load.tsx`).
