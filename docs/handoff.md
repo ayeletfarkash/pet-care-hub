@@ -3,7 +3,7 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–3 merged into `dev` (not pushed). Phase 4 complete on `feature/phase-4-notifications` (5 slice commits), not yet merged into `dev`.
+- Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
 - Tests: 85 Vitest + 23 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
@@ -13,7 +13,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
 3. Try push on a real phone (needs HTTPS hosting or a tunnel; iOS needs the PWA added to the home screen).
-4. Merge `feature/phase-4-notifications` into `dev` (ask first), then manual checks: screen reader on Notifications/Search/Insights, header at 320 px / 200% text / Hebrew.
+4. Manual checks: screen reader on Notifications/Search/Insights, header at 320 px / 200% text / Hebrew.
 5. Phase 5 (future expansion) only after the Phase 4 acceptance criteria are confirmed in the browser.
 
 ## Open decisions (need the user)
