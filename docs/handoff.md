@@ -3,15 +3,17 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slice 1 of 5 committed.
+- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slices 1–2 of 5 committed.
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 74 Vitest + 20 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
-- Local dev DB migrated through 0004 (backups: `data/app.db.bak-pre-phase3`, `data/app.db.bak-pre-phase4`).
+- Tests: 78 Vitest + 20 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Local dev DB migrated through 0005 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`).
+- `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
 ## Next steps
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
-3. Phase 4 remaining slices, one commit each: (2) snooze + Web Push via `web-push` (service worker, manifest, VAPID env keys) · (3) automatic tasks: low stock → unassigned "Reorder X" task, opt-in appointment prep (1 day before) / follow-up tasks · (4) global search + filters (LIKE, group-scoped, leak test) · (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
+3. Try push on a real phone (needs HTTPS hosting or a tunnel; iOS needs the PWA added to the home screen).
+4. Phase 4 remaining slices, one commit each: (3) automatic tasks: low stock → unassigned "Reorder X" task, opt-in appointment prep (1 day before) / follow-up tasks · (4) global search + filters (LIKE, group-scoped, leak test) · (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
 
 ## Open decisions (need the user)
 - Email provider for invitations (currently dev-only console log).
@@ -21,6 +23,10 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-14: Phase 4 slice 2 (snooze + Web Push)
+- Decisions: `web-push` pinned to 3.6.7 (4.0.0 released 8 days earlier); push endpoints allowlisted to real push services (SSRF); payloads name the pet only; snooze never touches schedules and keeps one pending snooze per occurrence.
+- Lesson: Next loads `.env.local` in the E2E production server too; tests that depend on env set it explicitly in `playwright.config.ts` (dummy VAPID keys, `DISABLE_JOBS=1`).
+- Agents used: security-reviewer (no Critical/High; 2 Medium fixed: snooze row growth, unbounded push fan-out; Low fixed: userinfo in endpoint; takeover/lock-screen Lows accepted) · ui-ux-specialist (Majors fixed: unique Snooze button names, single push toggle keeps focus, "Checking…" status; focus-after-snooze rejected: status message is shown and the form stays; Hebrew labels, hints, bidi time fixed).
 ### 2026-11-14: Phase 4 slice 1 (notification core)
 - Decisions (user): deliver Phase 4 in slices; add `web-push` for push; low stock notifies all members, reorder task unassigned; appointment prep/follow-up tasks opt-in per event.
 - Decisions (design): reminders derived by an idempotent sweep (unique index, 6 h lookback, no "last run" state); notifications store i18n key + params; one reminder rule per source; preferences store only disabled categories; unassigned sources remind everyone.

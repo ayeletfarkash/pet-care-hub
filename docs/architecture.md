@@ -112,5 +112,15 @@ Rules added in slice 1:
 - Leaving/removal deletes the user's notifications and rule-recipient rows in that group.
 - Reminders whose time is more than 6 h past are dropped (no flood after downtime, and none for back-dated items).
 
+### Slice 2: snooze + Web Push
+| Piece | Where | Notes |
+|---|---|---|
+| Snooze | `snoozeNotification` in `services/notifications.ts`, inbox | Marks the notification read and inserts a `kind = snooze` row with a later `deliver_at` (15 min, 1 h, tomorrow 08:00, custom ≤ 30 days). Never writes to tasks/plans/schedules (PRD §12.5). One pending snooze per occurrence (a new one replaces it) |
+| Push | `services/push.ts`, `push_subscriptions`, `notifications.pushed_at` | `web-push@3.6.7` (pinned; 4.0.0 was days old). Runs after every sweep, not awaited by pages. Pushes unread notifications delivered in the last 30 min, once each (claimed via `pushed_at` before sending), 20 at a time with a 10 s timeout; 404/410 deletes the subscription. Payload names the pet only (lock screens) |
+| Subscriptions | profile → "Phone notifications" | Permission asked only after a button press. Endpoints must be https on known push services (FCM, Mozilla, Apple, WNS); no port or credentials (SSRF guard). Max 10 per user; an endpoint moves to whoever registers it last |
+| PWA | `public/sw.js`, `app/manifest.ts`, `/pwa-icon/<180|192|512>` | Service worker shows the push and always opens `/notifications` (URL never taken from the payload). Icons drawn with `next/og` shapes, no fonts fetched |
+
+Push is off unless `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set; the inbox is always the fallback (PRD §12.3).
+
 ## Deferred (later phases / decisions needed)
 Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

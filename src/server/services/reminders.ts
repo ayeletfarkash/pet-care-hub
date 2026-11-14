@@ -10,6 +10,7 @@ import { occurrencesForGroups } from "./events";
 import { activitiesForGroups } from "./routines";
 import { itemsNeedingReorder } from "./inventory";
 import { CATEGORY_OF, DEFAULT_LEAD } from "./notifications";
+import { deliverPush } from "./push";
 
 // Background reminder sweep (PRD §12, §21.5). Runs every minute (src/instrumentation.ts) and on the
 // inbox page. It computes the occurrences whose reminder time fell in the last LOOKBACK_MINUTES and
@@ -118,6 +119,8 @@ let sweptAt = 0, sweptWrites = -1;
  */
 export function runSweep(opts: { ifChanged?: boolean } = {}): Promise<number> {
   if (!running && opts.ifChanged && Date.now() - sweptAt < (writeCount() === sweptWrites ? 60_000 : 5_000)) return Promise.resolve(0); // at most one page-load sweep per 5 s
-  running ??= sweep().finally(() => { running = null; sweptAt = Date.now(); sweptWrites = writeCount(); });
+  running ??= sweep()
+    .then((n) => { void deliverPush().catch((e) => console.error("push delivery failed", e)); return n; }) // network: don't hold up page renders
+    .finally(() => { running = null; sweptAt = Date.now(); sweptWrites = writeCount(); });
   return running;
 }

@@ -22,7 +22,8 @@ export type ErrorCode =
   | "transfer_pending"
   | "invalid_reference" // linked item/plan/order is not in this group
   | "invalid_occurrence_log" // not a scheduled activity, or too far back/ahead
-  | "routine_has_history";
+  | "routine_has_history"
+  | "invalid_snooze"; // in the past or more than 30 days ahead
 
 export class AppError extends Error {
   constructor(public code: ErrorCode) {

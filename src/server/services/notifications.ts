@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, lte } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import {
   events, groups, medicationPlans, NOTIFICATION_CATEGORIES, notificationPreferences, notifications, reminderRuleRecipients,
@@ -6,8 +6,8 @@ import {
 } from "../db/schema";
 import { AppError } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
-import { nowLocal } from "../schedule";
-import type { ReminderRuleInput } from "../validation";
+import { addMinutesLocal, nowLocal } from "../schedule";
+import { SNOOZE_MAX_DAYS, type ReminderRuleInput } from "../validation";
 
 // PRD §12. Personal preferences, per-source recipient rules, and the user's notification inbox.
 
@@ -108,6 +108,40 @@ export async function markRead(userId: string, notificationId?: string) {
       notificationId ? eq(notifications.id, notificationId) : undefined,
     ));
   });
+}
+
+/**
+ * Snooze (PRD §12.5): marks this notification read and adds a new one for later. Never touches the task,
+ * plan or schedule, so a snoozed dose stays due in Today and in the plan's history.
+ */
+export async function snoozeNotification(userId: string, notificationId: string, until: string) {
+  const now = nowLocal();
+  if (until <= now || until > addMinutesLocal(now, SNOOZE_MAX_DAYS * 1440)) throw new AppError("invalid_snooze");
+  await writeTx(async (tx) => {
+    const row = await tx.select({ n: notifications }).from(notifications).innerJoin(groups, eq(groups.id, notifications.groupId))
+      .where(and(eq(notifications.id, notificationId), visible(userId))).get();
+    if (!row) throw new AppError("not_found");
+    const n = row.n;
+    await tx.update(notifications).set({ readAt: new Date() }).where(eq(notifications.id, n.id));
+    const base = n.kind === "snooze" ? n.occurrenceKey.split("@")[0] : n.occurrenceKey;
+    // One pending snooze per occurrence: a new snooze replaces the old one (no unbounded rows).
+    await tx.delete(notifications).where(and(
+      eq(notifications.userId, userId), eq(notifications.sourceType, n.sourceType), eq(notifications.sourceId, n.sourceId),
+      eq(notifications.kind, "snooze"), like(notifications.occurrenceKey, `${base}@%`), gt(notifications.deliverAt, now),
+    ));
+    await tx.insert(notifications).values({
+      groupId: n.groupId, userId, category: n.category, sourceType: n.sourceType, sourceId: n.sourceId,
+      occurrenceKey: `${base}@${until}`, kind: "snooze", deliverAt: until, params: n.params,
+    }).onConflictDoNothing();
+  });
+}
+
+/** Snoozed notifications still waiting (shown in the inbox as "Snoozed until …"). */
+export async function pendingSnoozes(userId: string) {
+  return db.select({ id: notifications.id, sourceType: notifications.sourceType, params: notifications.params, deliverAt: notifications.deliverAt })
+    .from(notifications).innerJoin(groups, eq(groups.id, notifications.groupId))
+    .where(and(eq(notifications.userId, userId), eq(notifications.kind, "snooze"), gt(notifications.deliverAt, nowLocal()), isNull(groups.deletedAt)))
+    .orderBy(notifications.deliverAt).limit(50);
 }
 
 /** Leaving/removal: the user's rule memberships and notifications in that group go too (same transaction). */

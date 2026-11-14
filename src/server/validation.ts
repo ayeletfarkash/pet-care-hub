@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   EVENT_TYPES, INVENTORY_TYPES, LOCALES, NOTIFICATION_CATEGORIES, RECIPIENT_MODES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
 } from "./db/schema";
-import { isValidTime, todayLocal } from "./schedule";
+import { addDays, addMinutesLocal, isValidTime, nowLocal, todayLocal } from "./schedule";
 
 // Issue messages are i18n keys under `validation.*`.
 const req = (max = 120) => z.string().trim().min(1, "required").max(max, "too_long");
@@ -265,3 +265,28 @@ export const reminderRuleSchema = z.object({
 }).refine((v) => v.recipientMode !== "selected" || v.recipients.length > 0, { message: "recipients_required", path: ["recipients"] })
   .transform((v) => ({ ...v, recipients: v.recipientMode === "selected" ? [...new Set(v.recipients)] : [] }));
 export type ReminderRuleInput = z.infer<typeof reminderRuleSchema>;
+
+export const SNOOZE_MAX_DAYS = 30;
+/** Snooze (PRD §12.4): 15 min, 1 h, tomorrow 08:00, or a custom local time. Resolves to the new delivery time. */
+export const snoozeSchema = z.object({
+  option: z.enum(["15", "60", "tomorrow", "custom"]),
+  customAt: z.string().trim().optional(),
+}).superRefine((v, ctx) => {
+  if (v.option === "custom" && !localDateTime.safeParse(v.customAt ?? "").success) ctx.addIssue({ code: "custom", path: ["customAt"], message: "invalid_date" });
+}).transform((v) => {
+  const now = nowLocal();
+  if (v.option === "tomorrow") return { until: `${addDays(now.slice(0, 10), 1)}T08:00` };
+  if (v.option === "custom") return { until: v.customAt! };
+  return { until: addMinutesLocal(now, Number(v.option)) };
+});
+
+// Only real browser push services, so a crafted endpoint can't make the server send requests elsewhere (SSRF).
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^web\.push\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
+const b64url = (max: number) => z.string().regex(/^[A-Za-z0-9_-]+={0,2}$/).max(max);
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().max(1000).refine((v) => {
+    try { const u = new URL(v); return u.protocol === "https:" && !u.port && !u.username && !u.password && PUSH_HOSTS.some((h) => h.test(u.hostname)); } catch { return false; }
+  }),
+  keys: z.object({ p256dh: b64url(200), auth: b64url(100) }),
+});
+export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;

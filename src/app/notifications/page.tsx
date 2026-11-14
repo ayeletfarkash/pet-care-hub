@@ -1,10 +1,11 @@
 import { requireUser } from "@/server/auth/session";
-import { hrefOf, listNotifications } from "@/server/services/notifications";
+import { hrefOf, listNotifications, pendingSnoozes } from "@/server/services/notifications";
 import { fmt, formatLocalDateTime } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { Badge } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ActionForm } from "@/components/forms/action-form";
+import { SnoozeForm } from "@/components/forms/notification-forms";
 import { markReadAction } from "@/app/actions/notifications";
 import { taskStatusAction } from "@/app/actions/tasks";
 
@@ -15,7 +16,7 @@ export async function generateMetadata() {
 
 export default async function NotificationsPage() {
   const user = await requireUser();
-  const [{ t, locale }, list] = await Promise.all([getT(), listNotifications(user.id)]);
+  const [{ t, locale }, list, snoozed] = await Promise.all([getT(), listNotifications(user.id), pendingSnoozes(user.id)]);
   const k = t.notifications;
   const anyUnread = list.some((n) => !n.readAt);
   return (
@@ -43,11 +44,25 @@ export default async function NotificationsPage() {
                       label={k.completeTask} ariaLabel={`${k.completeTask}: ${n.params.name}`} pendingLabel={t.common.saving} variant="primary" />
                   )}
                   {!n.readAt && <ActionForm action={markReadAction} fields={{ id: n.id }} label={k.markRead} ariaLabel={`${k.markRead}: ${title}`} pendingLabel={t.common.saving} variant="ghost" />}
+                  <SnoozeForm t={t} id={n.id} label={title} />
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+      {snoozed.length > 0 && (
+        <section aria-labelledby="snoozed-h" className="mt-8">
+          <h2 id="snoozed-h" className="mb-3 text-2xl font-bold">{k.snoozedTitle}</h2>
+          <ul className="space-y-1">
+            {snoozed.map((n) => (
+              <li key={n.id}>
+                {fmt(k.kinds[n.sourceType], { name: n.params.name, pet: n.params.pet })}
+                <span className="text-sm text-muted"> · {k.snoozedUntil.split("{at}")[0]}<span className="ltr-value">{formatLocalDateTime(locale, n.deliverAt)}</span>{k.snoozedUntil.split("{at}")[1]}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );

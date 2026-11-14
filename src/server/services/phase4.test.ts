@@ -1,18 +1,30 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const sent = vi.hoisted(() => [] as { endpoint: string; payload: string }[]);
+vi.mock("web-push", () => ({
+  default: {
+    setVapidDetails: () => {},
+    sendNotification: async (sub: { endpoint: string }, payload: string) => {
+      if (sub.endpoint.includes("gone")) throw Object.assign(new Error("gone"), { statusCode: 410 });
+      sent.push({ endpoint: sub.endpoint, payload });
+    },
+  },
+}));
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
-import { notifications } from "../db/schema";
+import { notifications, pushSubscriptions } from "../db/schema";
 import { makeGroup, makeUser } from "../../test/factories";
 import { resetRateLimits } from "../rate-limit";
 import { addMinutesLocal, nowLocal } from "../schedule";
-import { eventSchema, inventoryItemSchema, medicationPlanSchema, reminderRuleSchema, stockChangeSchema, taskSchema } from "../validation";
+import { eventSchema, inventoryItemSchema, medicationPlanSchema, pushSubscriptionSchema, reminderRuleSchema, snoozeSchema, stockChangeSchema, taskSchema } from "../validation";
 import { acceptInvitation, createInvitation } from "./invitations";
 import { leaveGroup, removeMember } from "./members";
 import { createPlan, recordAdministration } from "./medications";
 import { createEvent } from "./events";
-import { createTask } from "./tasks";
+import { createTask, getTask } from "./tasks";
 import { changeStock, createItem } from "./inventory";
-import { getNotificationPrefs, getReminderRule, listNotifications, markRead, setNotificationPrefs, setReminderRule, unreadCount } from "./notifications";
+import { getNotificationPrefs, getReminderRule, listNotifications, markRead, pendingSnoozes, setNotificationPrefs, setReminderRule, snoozeNotification, unreadCount } from "./notifications";
+import { deliverPush, saveSubscription } from "./push";
 import { sweep } from "./reminders";
 
 const code = async (p: Promise<unknown>) => {
@@ -145,5 +157,69 @@ describe("reminder rules and inbox permissions", () => {
     expect((await mine(s.care, id))[0].readAt).not.toBeNull();
     await leaveGroup(s.care, s.g);
     expect(await unreadCount(s.care)).toBe(0);
+  });
+});
+
+describe("snooze", () => {
+  it("re-delivers later without touching the task or another user's notifications", async () => {
+    const s = await setup();
+    const id = await createTask(s.admin, s.g, task(-5, { assignees: [s.care] }));
+    await sweep();
+    const [n] = await mine(s.care, id);
+    const until = at(30).s;
+    expect(await code(snoozeNotification(s.out, n.id, until))).toBe("not_found");
+    expect(await code(snoozeNotification(s.care, n.id, at(-1).s))).toBe("invalid_snooze");
+    expect(await code(snoozeNotification(s.care, n.id, at(31 * 1440).s))).toBe("invalid_snooze");
+    await snoozeNotification(s.care, n.id, until);
+    const rows = await mine(s.care, id);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.id === n.id)?.readAt).not.toBeNull();
+    expect((await listNotifications(s.care)).some((r) => r.kind === "snooze")).toBe(false); // hidden until then
+    expect((await pendingSnoozes(s.care)).map((r) => r.deliverAt)).toEqual([until]);
+    const { task: t } = await getTask(s.admin, s.g, id);
+    expect(t.status).toBe("new"); // the task itself is unchanged
+    await sweep();
+    expect(await mine(s.care, id)).toHaveLength(2); // the sweep doesn't recreate the original
+    await snoozeNotification(s.care, n.id, at(45).s); // snoozing again replaces the pending snooze
+    await snoozeNotification(s.care, n.id, at(50).s);
+    expect((await pendingSnoozes(s.care)).filter((r) => r.params.name === "Feed").map((r) => r.deliverAt)).toEqual([at(50).s]);
+  });
+
+  it("resolves the options to a local time", () => {
+    expect(snoozeSchema.parse({ option: "tomorrow" }).until.endsWith("T08:00")).toBe(true);
+    expect(snoozeSchema.parse({ option: "custom", customAt: "2030-01-02T09:30" }).until).toBe("2030-01-02T09:30");
+    expect(snoozeSchema.safeParse({ option: "custom", customAt: "soon" }).success).toBe(false);
+  });
+});
+
+describe("web push", () => {
+  afterEach(() => { delete process.env.VAPID_PUBLIC_KEY; delete process.env.VAPID_PRIVATE_KEY; sent.length = 0; });
+  const sub = (endpoint: string) => ({ endpoint, keys: { p256dh: "BPub_Key-1", auth: "auth_1" } });
+
+  it("accepts only real push service endpoints", () => {
+    for (const ok of ["https://fcm.googleapis.com/fcm/send/abc", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/Q", "https://wns2-db5p.notify.windows.com/w/?token=1"])
+      expect(pushSubscriptionSchema.safeParse(sub(ok)).success).toBe(true);
+    for (const bad of ["http://fcm.googleapis.com/x", "https://evil.example/x", "https://fcm.googleapis.com.evil.example/x", "https://fcm.googleapis.com:8443/x", "https://127.0.0.1/x"])
+      expect(pushSubscriptionSchema.safeParse(sub(bad)).success).toBe(false);
+  });
+
+  it("pushes each new notification once, without item names, and drops dead subscriptions", async () => {
+    const s = await setup();
+    await saveSubscription(s.care, pushSubscriptionSchema.parse(sub("https://fcm.googleapis.com/fcm/send/care-1")));
+    await saveSubscription(s.care, pushSubscriptionSchema.parse(sub("https://fcm.googleapis.com/fcm/send/gone-1")));
+    const id = await createTask(s.admin, s.g, task(-5, { title: "Secret pill", assignees: [s.care] }));
+    await sweep();
+    expect(await deliverPush()).toBe(0); // no VAPID keys → push off
+    process.env.VAPID_PUBLIC_KEY = "pub"; process.env.VAPID_PRIVATE_KEY = "priv";
+    await deliverPush();
+    const mineSent = sent.filter((x) => x.endpoint.endsWith("care-1"));
+    expect(mineSent.length).toBeGreaterThanOrEqual(1);
+    expect(mineSent.map((x) => x.payload).join()).not.toContain("Secret pill");
+    expect((await mine(s.care, id))[0].pushedAt).not.toBeNull();
+    const subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, s.care));
+    expect(subs.map((x) => x.endpoint)).toEqual(["https://fcm.googleapis.com/fcm/send/care-1"]);
+    const before = sent.length;
+    await deliverPush();
+    expect(sent.length).toBe(before); // already pushed
   });
 });

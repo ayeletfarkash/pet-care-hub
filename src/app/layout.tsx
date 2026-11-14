@@ -15,7 +15,7 @@ import { logoutAction } from "./actions/auth";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  return { title: { default: t.app.name, template: `%s · ${t.app.name}` }, description: t.app.tagline };
+  return { title: { default: t.app.name, template: `%s · ${t.app.name}` }, description: t.app.tagline, icons: { apple: "/pwa-icon/180" } };
 }
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9a3412" };
 

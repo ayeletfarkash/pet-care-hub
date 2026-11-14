@@ -46,9 +46,20 @@ test.describe("Phase 4 notifications", () => {
     await item.getByRole("button", { name: "Mark task as completed: Refill water" }).click();
     await ok(page, "Task updated");
     await expect(item.getByRole("button", { name: /Mark task as completed/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "Mark all as read" }).click();
-    await ok(page, "All notifications marked as read.");
-    await expect(page.getByRole("link", { name: /unread/ })).toHaveCount(0);
+    // Snooze: a new reminder later; the task's own state is untouched
+    await item.getByText("Snooze", { exact: true }).and(item.locator("summary")).click();
+    await item.getByLabel("Snooze until").selectOption("custom");
+    await item.getByLabel("Date and time").fill("2000-01-01T08:00");
+    await item.locator("form").getByRole("button", { name: "Snooze: Task due: Refill water for Rex" }).click();
+    await expect(item.getByText("Choose a time in the next 30 days.")).toBeVisible();
+    await item.getByLabel("Snooze until").selectOption("60");
+    await item.locator("form").getByRole("button", { name: "Snooze: Task due: Refill water for Rex" }).click();
+    await ok(page, /Snoozed. You'll be reminded again then/);
+    await expect(page.getByRole("region", { name: "Snoozed" })).toContainText("Task due: Refill water for Rex");
+    await expectNoA11yViolations(page);
+
+    await expect(page.getByRole("link", { name: /unread/ })).toHaveCount(0); // snoozing marked the original read
+    await expect(page.getByRole("button", { name: "Mark all as read" })).toHaveCount(0);
 
     // Personal preferences
     await page.goto("/profile");
@@ -58,6 +69,17 @@ test.describe("Phase 4 notifications", () => {
     await expect(prefs.getByText("Changes saved.")).toBeVisible();
     await page.reload();
     await expect(page.getByRole("region", { name: "Notification preferences" }).getByRole("checkbox", { name: "Tasks" })).not.toBeChecked();
+    // Push section (the test server has dummy keys; permission is only asked after the button press)
+    const push = page.getByRole("region", { name: "Phone notifications" });
+    await expect(push.getByRole("status")).toHaveText("Notifications are off for this device.");
+    await expect(push.getByRole("button", { name: "Turn on notifications on this device" })).toBeVisible();
     await expectNoA11yViolations(page);
+
+    // PWA plumbing
+    const manifest = await (await page.request.get("/manifest.webmanifest")).json();
+    expect(manifest.display).toBe("standalone");
+    expect((await page.request.get("/pwa-icon/192")).headers()["content-type"]).toContain("image/png");
+    expect((await page.request.get("/pwa-icon/77")).status()).toBe(404);
+    expect(await (await page.request.get("/sw.js")).text()).toContain("notificationclick");
   });
 });

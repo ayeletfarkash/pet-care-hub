@@ -496,6 +496,7 @@ export const notifications = sqliteTable(
     deliverAt: text("deliver_at").notNull(), // local Israel time; hidden until then
     params: text("params", { mode: "json" }).$type<{ name: string; pet: string; at?: string }>().notNull(), // rendered in the reader's language
     readAt: integer("read_at", { mode: "timestamp_ms" }),
+    pushedAt: integer("pushed_at", { mode: "timestamp_ms" }), // push attempted (at most once)
     createdAt: createdAt(),
   },
   (t) => [
@@ -503,4 +504,18 @@ export const notifications = sqliteTable(
     uniqueIndex("notifications_once_uq").on(t.userId, t.sourceType, t.sourceId, t.kind, t.occurrenceKey),
     index("notifications_user_deliver_idx").on(t.userId, t.deliverAt),
   ],
+);
+
+/** One Web Push subscription per browser/device (PRD §12.3). Endpoints are limited to known push services. */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)],
 );
