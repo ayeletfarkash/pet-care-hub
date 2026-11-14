@@ -31,6 +31,8 @@ export async function createPet(page: Page, name: string, species = "dog") {
 export async function expectNoA11yViolations(page: Page) {
   // Let colour transitions (e.g. switching to high contrast) finish, or axe samples mid-fade.
   await page.waitForFunction(() => document.getAnimations().length === 0);
+  // Next streams <title> after the page body; scanning before it lands reports a false document-title violation.
+  await page.waitForFunction(() => document.title !== "");
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

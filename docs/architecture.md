@@ -95,5 +95,60 @@ Rules added in Phase 3:
 
 Deliberately not in Phase 3: reminder recipients for routines (Phase 4 notifications) · automatic reorder tasks (Phase 4) · deducting stock automatically when a dose is given · currency other than ₪.
 
+## Phase 4: coordination (built in slices)
+### Slice 1: notification core
+| Piece | Where | Notes |
+|---|---|---|
+| Tables | `notification_preferences`, `reminder_rules`, `reminder_rule_recipients`, `notifications` | Preferences store only disabled categories (missing row = on). One rule per source (task/event/plan/routine): lead time (0/15/60/1440 min) + recipients (responsible · all · selected). No rule = responsible person, default lead (events 1 h, others 0) |
+| Sweep | `services/reminders.ts` | Recomputes the existing doses/occurrences/tasks/activities/low stock; inserts one notification per recipient for reminders whose time fell in the last 6 h. `UNIQUE(user, source_type, source_id, kind, occurrence_key)` + `ON CONFLICT DO NOTHING` makes every run idempotent, so no "last run" state is kept. Purges rows older than 90 days |
+| Scheduling | `src/instrumentation.ts` + root layout | 60 s `setInterval` per server process (`DISABLE_JOBS=1` turns it off), plus a page-load sweep when anything was written since the last one (`writeCount()` in `db/index.ts`), so new items remind at once and the header count matches the inbox. Overlapping runs are coalesced |
+| Inbox | `/notifications`, header link with unread count | Stored as i18n key + params (each reader sees their language); links are built from source type/id, never stored. Task notifications offer "Mark task as completed" (reuses `taskStatusAction`) |
+
+Rules added in slice 1:
+- Recipients are filtered at creation: current members only, and only if the category is on in their preferences. Unassigned sources remind every member.
+- Low stock reminds every member once per restock cycle (cycle = number of purchase movements).
+- The sweep is a system job: group ids come from the database, so it has no `requireMembership` (documented exception).
+- Setting a rule needs the role that can create the source: Admin for plans/routines, any member for tasks/events. Selected recipients must be members.
+- Leaving/removal deletes the user's notifications and rule-recipient rows in that group.
+- Reminders whose time is more than 6 h past are dropped (no flood after downtime, and none for back-dated items).
+
+### Slice 2: snooze + Web Push
+| Piece | Where | Notes |
+|---|---|---|
+| Snooze | `snoozeNotification` in `services/notifications.ts`, inbox | Marks the notification read and inserts a `kind = snooze` row with a later `deliver_at` (15 min, 1 h, tomorrow 08:00, custom ≤ 30 days). Never writes to tasks/plans/schedules (PRD §12.5). One pending snooze per occurrence (a new one replaces it) |
+| Push | `services/push.ts`, `push_subscriptions`, `notifications.pushed_at` | `web-push@3.6.7` (pinned; 4.0.0 was days old). Runs after every sweep, not awaited by pages. Pushes unread notifications delivered in the last 30 min, once each (claimed via `pushed_at` before sending), 20 at a time with a 10 s timeout; 404/410 deletes the subscription. Payload names the pet only (lock screens) |
+| Subscriptions | profile → "Phone notifications" | Permission asked only after a button press. Endpoints must be https on known push services (FCM, Mozilla, Apple, WNS); no port or credentials (SSRF guard). Max 10 per user; an endpoint moves to whoever registers it last |
+| PWA | `public/sw.js`, `app/manifest.ts`, `/pwa-icon/<180|192|512>` | Service worker shows the push and always opens `/notifications` (URL never taken from the payload). Icons drawn with `next/og` shapes, no fonts fetched |
+
+Push is off unless `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set; the inbox is always the fallback (PRD §12.3).
+
+### Slice 3: automatic tasks
+| Piece | Where | Notes |
+|---|---|---|
+| Generator | `services/auto-tasks.ts`, run first in every sweep | Tasks get `source_type`/`source_id`/`source_key`; partial `UNIQUE(group_id, source_key)` + `ON CONFLICT DO NOTHING` = created at most once, and a completed/cancelled task is never recreated |
+| Low stock | key `reorder:<item>:<restock cycle>` | Unassigned "Reorder X" task (user decision). Skipped while an order for the item is ordered/processing/shipped or a reorder task is open. A new purchase starts a new cycle |
+| Appointments | opt-in `events.auto_prep` / `auto_followup` (checkboxes on the event form) | Prep task appears up to 1 day before (due at the appointment); follow-up within 1 day after (due end of next day). Assigned to the event's responsible person if still a member. Cancelled occurrences get none |
+| Doses | none | Already computed, shown in Today and reminded; dose tasks would duplicate them |
+
+Task text is stored, so it is written in the language of the group's first Admin. History shows "Created automatically · Automatic" (actor null).
+
+### Slice 4: global search
+| Piece | Where | Notes |
+|---|---|---|
+| Service | `services/search.ts` | Scope = `listUserGroups(userId)` (current, non-deleted groups), computed server-side; the group filter can only narrow it. Every query has `group_id IN (scope)`. `LIKE %q% ESCAPE` with `\ % _` escaped; min 2 chars, max 100; 20 results per type; 60 searches/min per user. Both roles read everything in their groups, so no per-type role filter |
+| Types | pets, tasks, events, medical, medications, products, orders | Filters: type, pet/group, status (open = open task / upcoming or recurring event / active plan / order in progress), responsible person (tasks, events, plans), date range (due/start/record/order date). A filter drops types it can't apply to |
+| Page | `/search` (GET form in `<search>`, header link) | Filters live in the URL. The result summary is an `<h2>` that receives focus on load (a live region isn't announced after a full page load) |
+
+Known limit: recurring events match on their first date only for the date filter.
+
+### Slice 5: insights + improved dashboard
+| Piece | Where | Notes |
+|---|---|---|
+| Rules | `services/insights.ts` | Computed on read from the existing readers (always current, no job). Kinds: overdue / other open tasks, repeating tasks that keep slipping (`isStrugglingSeries`: 3 of the last 5 instances in 4 weeks late, cancelled or overdue), out of stock or at threshold, running out within 7 days, doses in the next 24 h, vet/treatment/lab events in 30 days, events in 7 days, activities not done/logged in 7 days. Facts and counts only, never medical advice. Scope = current memberships; filters only narrow |
+| Page | `/insights` (GET filters: pet, topic) | Text cards per pet (no charts, PRD §18.7). Linked from the dashboard, not the header (header kept short for reflow) |
+| Dashboard | "At a glance" above Today | Only the kinds that need action, each linking to `/insights?group=…&category=…`; link text includes the pet name |
+
+Future AI (PRD §13.4): a new rule only needs to return the same `Insight` shape.
+
 ## Deferred (later phases / decisions needed)
-Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · notification preferences (Phase 4) · CSP header · persistent rate limiting.
+Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

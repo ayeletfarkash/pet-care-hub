@@ -15,7 +15,7 @@ export type FormState = {
 
 const NEVER_ECHO = new Set(["password", "photo", "confirmName", "files"]);
 /** Fields submitted as several inputs with the same name (checkbox groups, repeated time inputs). */
-const MULTI_VALUE = ["times", "weekdays", "assignees"];
+const MULTI_VALUE = ["times", "weekdays", "assignees", "categories", "recipients"];
 
 function echo(fd: FormData) {
   const values: Record<string, string> = {};

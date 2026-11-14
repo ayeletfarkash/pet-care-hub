@@ -25,8 +25,11 @@ export { client };
 // busy timeout). So every write goes through one in-process queue. Reads stay concurrent (WAL).
 // shortcut: single-process only; with >1 server process move to Postgres (SELECT ... FOR UPDATE).
 let writeChain: Promise<unknown> = Promise.resolve();
+let writes = 0;
+/** Number of committed write transactions in this process (lets the reminder sweep skip when nothing changed). */
+export const writeCount = () => writes;
 export function writeTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  const run = writeChain.then(() => db.transaction(fn));
+  const run = writeChain.then(() => db.transaction(fn)).then((r) => { writes++; return r; });
   writeChain = run.catch(() => {});
   return run;
 }

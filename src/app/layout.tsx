@@ -3,7 +3,9 @@ import Link from "next/link";
 import "./globals.css";
 import { getCurrentUser } from "@/server/auth/session";
 import { getRequestA11y } from "@/server/a11y-cookie";
-import { dirOf } from "@/i18n";
+import { unreadCount } from "@/server/services/notifications";
+import { runSweep } from "@/server/services/reminders";
+import { dirOf, fmt } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { A11yToolbar } from "@/components/a11y-toolbar";
 import { LanguageSwitch } from "@/components/language-switch";
@@ -13,12 +15,16 @@ import { logoutAction } from "./actions/auth";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  return { title: { default: t.app.name, template: `%s · ${t.app.name}` }, description: t.app.tagline };
+  return { title: { default: t.app.name, template: `%s · ${t.app.name}` }, description: t.app.tagline, icons: { apple: "/pwa-icon/180" } };
 }
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9a3412" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [{ t, locale }, user, { prefs, perAccount }] = await Promise.all([getT(), getCurrentUser(), getRequestA11y()]);
+  // Catch-up sweep before counting, so the header count and the inbox agree (and reminders don't wait for the timer).
+  // shortcut: sweeps all groups after any write; switch to per-user sweeps if this gets slow.
+  if (user) await runSweep({ ifChanged: true }).catch((e) => console.error("reminder sweep failed", e));
+  const unread = user ? await unreadCount(user.id) : 0;
   // Applied server-side so preferences hold on first paint, with no flash.
   const htmlClass = [
     prefs.contrast === "high" && "contrast-high",
@@ -47,6 +53,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {user ? (
                   <>
                     <li><NavLink href="/">{t.nav.dashboard}</NavLink></li>
+                    <li><NavLink href="/search">{t.nav.search}</NavLink></li>
+                    <li>
+                      <NavLink href="/notifications">
+                        {t.nav.notifications}
+                        {unread > 0 && (
+                          <span className="ms-1 rounded-full bg-primary px-2 text-sm text-on-primary">
+                            <span aria-hidden="true">{unread >= 100 ? "99+" : unread}</span>
+                            <span className="sr-only">{fmt(t.nav.unread, { count: unread })}</span>
+                          </span>
+                        )}
+                      </NavLink>
+                    </li>
                     <li><NavLink href="/profile">{t.nav.profile}</NavLink></li>
                     <li>
                       <form action={logoutAction}>

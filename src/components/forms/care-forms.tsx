@@ -19,7 +19,7 @@ function Hidden({ fields }: { fields: Record<string, string> }) {
 }
 
 /** Checkbox group with a real fieldset/legend and an associated error (WCAG 1.3.1, 3.3.1). */
-function CheckboxGroup({ name, legendText, options, checked, error, idPrefix }: {
+export function CheckboxGroup({ name, legendText, options, checked, error, idPrefix }: {
   name: string; legendText: string; options: { value: string; label: string }[]; checked: string[]; error?: string; idPrefix: string;
 }) {
   return (
@@ -199,6 +199,12 @@ export function EventForm({ t, action, hidden, initial, members, submitLabel, to
           {rec !== "none" && <TextField {...f("recurrenceUntil")} type="date" label={ev.until} hint={ev.untilHint} />}
         </div>
         {hidden.eventId && <p className="text-sm text-muted">{ev.recurringNote}</p>}
+      </fieldset>
+      <fieldset className={card}>
+        <legend className={legend}>{ev.autoSection}</legend>
+        <p className="mb-3 text-sm text-muted">{ev.autoHint}</p>
+        <CheckboxField name="autoPrep" label={ev.autoPrep} defaultChecked={v.autoPrep === true || v.autoPrep === "on"} />
+        <CheckboxField name="autoFollowup" label={ev.autoFollowup} defaultChecked={v.autoFollowup === true || v.autoFollowup === "on"} />
       </fieldset>
       <SubmitButton pendingLabel={t.common.saving}>{submitLabel}</SubmitButton>
     </form>

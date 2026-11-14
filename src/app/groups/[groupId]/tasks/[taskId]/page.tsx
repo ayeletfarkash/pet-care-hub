@@ -14,6 +14,7 @@ import { CommentForm, TransferForm } from "@/components/forms/care-forms";
 import { commentAction, decideTransferAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
 import { dueText } from "../due";
 import { loadGroup } from "../../load";
+import { ReminderSection } from "@/components/reminder-section";
 
 export default async function TaskPage({ params, searchParams }: { params: Promise<{ groupId: string; taskId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, taskId } = await params;
@@ -82,6 +83,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
         </section>
       )}
 
+      {open && <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="task" sourceId={taskId} />}
+
       <section aria-labelledby="comments-h" className="mb-8">
         <h2 id="comments-h" className="mb-3 text-2xl font-bold">{k.comments}</h2>
         {comments.length === 0 ? <p className="mb-3 text-muted">{k.noComments}</p> : (
@@ -102,7 +105,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
         <ol className="space-y-1">
           {history.map((h) => (
             <li key={h.id} className="text-sm">
-              <span className="font-semibold">{k.actions[h.action as keyof typeof k.actions] ?? h.action}</span> · {h.name ?? t.ui.formerMember} · {formatDateTime(locale, h.createdAt)}
+              <span className="font-semibold">{k.actions[h.action as keyof typeof k.actions] ?? h.action}</span> · {h.action === "auto_created" ? k.automatic : h.name ?? t.ui.formerMember} · {formatDateTime(locale, h.createdAt)}
             </li>
           ))}
         </ol>

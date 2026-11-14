@@ -116,7 +116,7 @@ test.describe("Phase 2 daily care", () => {
     await expectNoA11yViolations(admin);
     await admin.goto("/profile");
     await admin.getByLabel("Preferred language").selectOption("he");
-    await admin.getByRole("button", { name: "Save" }).click();
+    await admin.getByRole("button", { name: "Save", exact: true }).click();
     for (const p of ["/medications/new", "/calendar", "/tasks/new"]) {
       await admin.goto(base + p);
       await expect(admin.locator("html")).toHaveAttribute("dir", "rtl");

@@ -118,3 +118,7 @@ export function stockStatus(i: { quantity: number; dailyUsage: number | null; lo
     needsReorder: i.quantity <= 0 || (i.lowStockThreshold != null && i.quantity <= i.lowStockThreshold) || (daysLeft != null && daysLeft <= REORDER_LEAD_DAYS),
   };
 }
+
+/** Wall-clock arithmetic on a local date-time ("08:00" − 15 min = "07:45"); naive, like the rest of this file. */
+export const addMinutesLocal = (at: LocalDateTime, n: number): LocalDateTime =>
+  new Date(new Date(`${at}:00Z`).getTime() + n * 60_000).toISOString().slice(0, 16);

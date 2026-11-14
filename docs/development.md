@@ -20,6 +20,9 @@ npm 11 blocks dependency install scripts by default. esbuild's postinstall is bl
 | `UPLOAD_DIR` | `./data/uploads` | pet photos; must not be inside `public/` |
 | `APP_URL` | from request Host header | **set in production**; used in invitation links |
 | `ACCESSIBILITY_CONTACT_EMAIL` | empty | shown on the accessibility statement |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | empty | Web Push keys (`npx web-push generate-vapid-keys`); without them push is off and the inbox is the only channel. Private key is a secret |
+| `VAPID_SUBJECT` | `mailto:admin@localhost` | contact sent to push services; set a real `mailto:` in production |
+| `DISABLE_JOBS` | empty | `1` stops the in-process reminder timer |
 
 ## Scripts
 | Script | What it does |

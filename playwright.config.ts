@@ -2,7 +2,9 @@ import { defineConfig } from "@playwright/test";
 
 const PORT = 3100;
 // Isolated DB + uploads for E2E; wiped on every run by e2e/server.mjs.
-const env = { DATABASE_URL: "file:./data/e2e/app.db", UPLOAD_DIR: "./data/e2e/uploads", NEXT_TELEMETRY_DISABLED: "1", REGISTER_RATE_LIMIT: "200" };
+const env = { DATABASE_URL: "file:./data/e2e/app.db", UPLOAD_DIR: "./data/e2e/uploads", NEXT_TELEMETRY_DISABLED: "1", REGISTER_RATE_LIMIT: "200",
+  // Fixed dummy keys (override .env.local) so the push section renders the same everywhere; tests never subscribe.
+  VAPID_PUBLIC_KEY: "e2e-dummy-public-key", VAPID_PRIVATE_KEY: "e2e-dummy-private-key", DISABLE_JOBS: "1" };
 
 export default defineConfig({
   testDir: "./e2e",

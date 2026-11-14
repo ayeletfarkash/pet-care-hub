@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import { inventoryItems, inventoryMovements, medicationPlans, users } from "../db/schema";
 import { AppError } from "../errors";
@@ -108,4 +108,12 @@ export async function itemsNeedingReorder(groupIds: string[]) {
   const today = todayLocal();
   const items = await db.select().from(inventoryItems).where(inArray(inventoryItems.groupId, groupIds)).orderBy(asc(inventoryItems.name));
   return items.map((i) => withStatus(i, today)).filter((i) => i.needsReorder);
+}
+
+/** Restock cycle per item = number of purchases so far; a new purchase starts a new cycle (low-stock reminders and reorder tasks repeat once per cycle). */
+export async function restockCycles(itemIds: string[]): Promise<Map<string, number>> {
+  if (itemIds.length === 0) return new Map();
+  const rows = await db.select({ itemId: inventoryMovements.itemId, n: count() }).from(inventoryMovements)
+    .where(and(inArray(inventoryMovements.itemId, itemIds), eq(inventoryMovements.kind, "purchase"))).groupBy(inventoryMovements.itemId);
+  return new Map(rows.map((r) => [r.itemId, r.n]));
 }

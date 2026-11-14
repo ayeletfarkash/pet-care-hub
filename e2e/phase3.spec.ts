@@ -105,7 +105,7 @@ test.describe("Phase 3 inventory and routines", () => {
     }
     await admin.goto("/profile");
     await admin.getByLabel("Preferred language").selectOption("he");
-    await admin.getByRole("button", { name: "Save" }).click();
+    await admin.getByRole("button", { name: "Save", exact: true }).click();
     for (const p of ["/inventory/new", "/orders/new", "/routines"]) {
       await admin.goto(base + p);
       await expect(admin.locator("html")).toHaveAttribute("dir", "rtl");
