@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* Contrast (PRD §18.2): text ≥ 4.5:1, UI borders/focus ≥ 3:1 against the page background. */
+:root {
+  --bg: #fffaf4;
+  --surface: #ffffff;
+  --text: #1c1917;
+  --muted: #57534e; /* 7.0:1 on --bg */
+  --border: #78716c; /* 4.6:1 on --bg, for inputs and controls */
+  --divider: #e7e0d8; /* decorative only */
+  --primary: #9a3412; /* white text on it: 7.3:1 */
+  --primary-hover: #7c2d12;
+  --on-primary: #ffffff;
+  --link: #9a3412;
+  --accent-bg: #ffedd5;
+  --danger: #b91c1c; /* 6.3:1 on white */
+  --danger-bg: #fef2f2;
+  --success: #166534;
+  --success-bg: #f0fdf4;
+  --focus: #1d4ed8;
+  --radius: 0.75rem;
+}
+
+html.contrast-high {
+  --bg: #000000;
+  --surface: #000000;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --border: #ffffff;
+  --divider: #ffffff;
+  --primary: #ffff00;
+  --primary-hover: #ffffff;
+  --on-primary: #000000;
+  --link: #ffff00;
+  --accent-bg: #000000;
+  --danger: #ff8a8a;
+  --danger-bg: #000000;
+  --success: #7dff9a;
+  --success-bg: #000000;
+  --focus: #00ffff;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-divider: var(--divider);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-link: var(--link);
+  --color-accent: var(--accent-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --font-sans: "Segoe UI", "Rubik", "Noto Sans Hebrew", "Arial Hebrew", Arial, system-ui, sans-serif;
+}
+
+/* Element defaults live in the base layer so Tailwind utilities (e.g. a link styled as a
+   primary button) can override them. Unlayered rules would beat every utility. */
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+  a { color: var(--link); text-underline-offset: 0.2em; }
+  a:hover { text-decoration: underline; }
+  /* Visible focus for every interactive element (WCAG 2.4.7 / 2.4.13). */
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* User preferences below stay unlayered on purpose: they must win over component styles. */
+/* Links inside running text are always underlined (not colour alone, WCAG 1.4.1). */
+.prose-links a, html.underline-links a { text-decoration: underline; }
+html.focus-strong :focus-visible,
+html.focus-strong :focus {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--focus) 35%, transparent);
+}
+main:focus { outline: none; }
+
+html.contrast-high img { filter: none; }
+html.contrast-high .card, html.contrast-high input, html.contrast-high select, html.contrast-high textarea { border-color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+}
+
+/* No sticky header on purpose, so nothing can cover the focused element (WCAG 2.4.11). */
+
+dialog::backdrop { background: rgb(0 0 0 / 0.55); }
+
+/* Mixed-direction content (emails, phone numbers) keeps its own direction inside RTL text. */
+.ltr-value { direction: ltr; unicode-bidi: isolate; }
+/* LTR inputs (email, phone) in a Hebrew page still align with the rest of the RTL form. */
+[dir="rtl"] input[dir="ltr"] { text-align: right; }

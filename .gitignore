@@ -1,5 +1,30 @@
+# dependencies
+/node_modules
+
+# next.js / build
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+
+# local data (SQLite DB + uploaded files)
+/data/
+
+# env / secrets
 .env
 .env.*
 !.env.example
+*.pem
+
+# claude local settings
 .claude/settings.local.json
-node_modules/
+
+# misc
+.DS_Store
+npm-debug.log*
