@@ -15,6 +15,7 @@ import { ExtraActivityForm } from "@/components/forms/care-forms";
 import { deleteRoutineAction, endRoutineAction, logActivityAction, removeLogAction } from "@/app/actions/routines";
 import { planSummary } from "../../medications/summary";
 import { loadGroup } from "../../load";
+import { ReminderSection } from "@/components/reminder-section";
 
 export default async function RoutinePage({ params, searchParams }: { params: Promise<{ groupId: string; routineId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, routineId } = await params;
@@ -56,6 +57,8 @@ export default async function RoutinePage({ params, searchParams }: { params: Pr
           <ExtraActivityForm t={t} action={logActivityAction} hidden={{ groupId, routineId }} />
         </section>
       )}
+
+      <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="routine" sourceId={routineId} />
 
       <section aria-labelledby="hist-h" className="mb-8">
         <h2 id="hist-h" className="mb-3 text-2xl font-bold">{r.history}</h2>

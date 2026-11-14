@@ -2,6 +2,7 @@ import { and, asc, eq, or } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import { events, medicationPlans, memberships, routines, taskAssignees, taskTransferRequests, users, type Role } from "../db/schema";
 import { audit } from "../audit";
+import { releaseNotifications } from "./notifications";
 import { AppError } from "../errors";
 import { countAdmins, requireMembership } from "../permissions";
 
@@ -55,6 +56,7 @@ export async function removeMember(actorId: string, groupId: string, targetUserI
  */
 async function releaseResponsibilities(tx: Tx, groupId: string, userId: string) {
   await tx.delete(taskAssignees).where(and(eq(taskAssignees.groupId, groupId), eq(taskAssignees.userId, userId)));
+  await releaseNotifications(tx, groupId, userId);
   await tx.update(medicationPlans).set({ responsibleUserId: null }).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId)));
   await tx.update(events).set({ assigneeId: null }).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId)));
   await tx.update(routines).set({ responsibleUserId: null }).where(and(eq(routines.groupId, groupId), eq(routines.responsibleUserId, userId)));

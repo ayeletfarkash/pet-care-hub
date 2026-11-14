@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  EVENT_TYPES, INVENTORY_TYPES, LOCALES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
+  EVENT_TYPES, INVENTORY_TYPES, LOCALES, NOTIFICATION_CATEGORIES, RECIPIENT_MODES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
 } from "./db/schema";
 import { isValidTime, todayLocal } from "./schedule";
 
@@ -251,3 +251,17 @@ export const routineLogSchema = z.object({
   status: z.enum(["completed", "missed"]).catch("completed"),
   notes: opt(500),
 });
+
+// ───────── Phase 4 ─────────
+export const REMINDER_LEADS = [0, 15, 60, 1440] as const; // minutes before: at the time, 15 min, 1 h, 1 day
+
+/** Unchecked categories are absent from the form, so the list holds the enabled ones. */
+export const notificationPrefsSchema = z.object({ categories: z.array(z.enum(NOTIFICATION_CATEGORIES)).default([]) });
+
+export const reminderRuleSchema = z.object({
+  leadMinutes: z.coerce.number().refine((n) => (REMINDER_LEADS as readonly number[]).includes(n), "required"),
+  recipientMode: z.enum(RECIPIENT_MODES),
+  recipients: z.array(z.string().trim().min(1)).max(100).default([]),
+}).refine((v) => v.recipientMode !== "selected" || v.recipients.length > 0, { message: "recipients_required", path: ["recipients"] })
+  .transform((v) => ({ ...v, recipients: v.recipientMode === "selected" ? [...new Set(v.recipients)] : [] }));
+export type ReminderRuleInput = z.infer<typeof reminderRuleSchema>;

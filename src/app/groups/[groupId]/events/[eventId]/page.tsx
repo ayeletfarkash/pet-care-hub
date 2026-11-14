@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
 import { deleteEventAction, occurrenceStatusAction } from "@/app/actions/events";
 import { loadGroup } from "../../load";
+import { ReminderSection } from "@/components/reminder-section";
 
 export default async function EventPage({ params, searchParams }: { params: Promise<{ groupId: string; eventId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, eventId } = await params;
@@ -72,6 +73,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           </ul>
         </section>
       )}
+
+      {next.length > 0 && <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="event" sourceId={eventId} />}
 
       {isAdmin && (
         <ConfirmDialog triggerLabel={ev.deleteEvent} cancelLabel={t.common.cancel} title={fmt(ev.deleteTitle, { title: e.title })} body={ev.deleteBody}>

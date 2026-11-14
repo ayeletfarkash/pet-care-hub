@@ -95,5 +95,22 @@ Rules added in Phase 3:
 
 Deliberately not in Phase 3: reminder recipients for routines (Phase 4 notifications) · automatic reorder tasks (Phase 4) · deducting stock automatically when a dose is given · currency other than ₪.
 
+## Phase 4: coordination (built in slices)
+### Slice 1: notification core
+| Piece | Where | Notes |
+|---|---|---|
+| Tables | `notification_preferences`, `reminder_rules`, `reminder_rule_recipients`, `notifications` | Preferences store only disabled categories (missing row = on). One rule per source (task/event/plan/routine): lead time (0/15/60/1440 min) + recipients (responsible · all · selected). No rule = responsible person, default lead (events 1 h, others 0) |
+| Sweep | `services/reminders.ts` | Recomputes the existing doses/occurrences/tasks/activities/low stock; inserts one notification per recipient for reminders whose time fell in the last 6 h. `UNIQUE(user, source_type, source_id, kind, occurrence_key)` + `ON CONFLICT DO NOTHING` makes every run idempotent, so no "last run" state is kept. Purges rows older than 90 days |
+| Scheduling | `src/instrumentation.ts` + root layout | 60 s `setInterval` per server process (`DISABLE_JOBS=1` turns it off), plus a page-load sweep when anything was written since the last one (`writeCount()` in `db/index.ts`), so new items remind at once and the header count matches the inbox. Overlapping runs are coalesced |
+| Inbox | `/notifications`, header link with unread count | Stored as i18n key + params (each reader sees their language); links are built from source type/id, never stored. Task notifications offer "Mark task as completed" (reuses `taskStatusAction`) |
+
+Rules added in slice 1:
+- Recipients are filtered at creation: current members only, and only if the category is on in their preferences. Unassigned sources remind every member.
+- Low stock reminds every member once per restock cycle (cycle = number of purchase movements).
+- The sweep is a system job: group ids come from the database, so it has no `requireMembership` (documented exception).
+- Setting a rule needs the role that can create the source: Admin for plans/routines, any member for tasks/events. Selected recipients must be members.
+- Leaving/removal deletes the user's notifications and rule-recipient rows in that group.
+- Reminders whose time is more than 6 h past are dropped (no flood after downtime, and none for back-dated items).
+
 ## Deferred (later phases / decisions needed)
-Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · notification preferences (Phase 4) · CSP header · persistent rate limiting.
+Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

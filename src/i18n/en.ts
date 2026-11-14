@@ -1,6 +1,8 @@
 export const en = {
   app: { name: "Pet Care Hub", tagline: "Shared care for the pets you love" },
   nav: {
+    notifications: "Notifications",
+    unread: "{count} unread",
     skip: "Skip to main content",
     main: "Main navigation",
     dashboard: "Dashboard",
@@ -57,7 +59,7 @@ export const en = {
     restore: "Restore {pet}",
     deletedOn: "Deleted on {date}",
     restored: "Group restored.",
-    moreSoon: "Push notifications and smart reminders will be added in upcoming versions.",
+    moreSoon: "Phone push notifications will be added in an upcoming version. Reminders already appear under Notifications.",
   },
   species: {
     dog: "Dog", cat: "Cat", bird: "Bird", rabbit: "Rabbit", reptile: "Reptile",
@@ -175,7 +177,7 @@ export const en = {
   profile: {
     title: "Your profile",
     emailNote: "Your email address is used to sign in and can't be changed here.",
-    notificationsNote: "Notification preferences will be available when reminders are introduced.",
+    notificationsNote: "Choose which kinds of reminders you receive. This only affects you, not other group members.",
   },
   a11y: {
     open: "Accessibility",
@@ -223,6 +225,7 @@ export const en = {
     routine_has_history: "This routine has logged activities. End it instead of deleting it.",
   },
   validation: {
+    recipients_required: "Choose at least one person.",
     required: "This field is required.",
     email: "Enter a valid email address, for example name@example.com.",
     password_min: "Password must be at least 8 characters.",
@@ -581,6 +584,43 @@ export const en = {
     deleteRoutine: "Delete routine",
     deleteTitle: "Delete {name}?",
     deleteBody: "Routines with logged activities can't be deleted; end them instead.",
+  },
+  // ───────── Phase 4 ─────────
+  notifications: {
+    title: "Notifications",
+    intro: "Reminders for you from all your groups. They also stay here when phone notifications are off.",
+    empty: "No notifications yet.",
+    unreadBadge: "New",
+    markRead: "Mark as read",
+    markAllRead: "Mark all as read",
+    markedRead: "Marked as read.",
+    allMarkedRead: "All notifications marked as read.",
+    open: "Open",
+    completeTask: "Mark task as completed",
+    kinds: {
+      medication: "Dose due: {name} for {pet}",
+      event: "Coming up: {name} for {pet}",
+      task: "Task due: {name} for {pet}",
+      routine: "Activity due: {name} for {pet}",
+      inventory: "Running low: {name} for {pet}",
+    },
+    prefsTitle: "Notification preferences",
+    prefsLegend: "Send me reminders about",
+    savePrefs: "Save notification preferences",
+    categories: { medications: "Medications and treatments", events: "Appointments and events", tasks: "Tasks", inventory: "Inventory and products", routines: "Routines and activities" },
+    rule: {
+      title: "Reminders",
+      readOnly: "{lead}, to {who}.",
+      lead: "When to remind",
+      leads: { "0": "At the scheduled time", "15": "15 minutes before", "60": "1 hour before", "1440": "1 day before" },
+      who: "Who gets the reminder",
+      modes: { responsible: "The responsible person (everyone if nobody is assigned)", all: "All group members", selected: "Selected members" },
+      whoShort: { responsible: "the responsible person", all: "all group members", selected: "selected members" },
+      recipients: "Members to remind",
+      hint: "Each person only receives it if this kind of reminder is on in their own preferences.",
+      save: "Save reminders",
+    },
+    ruleSaved: "Reminder settings saved.",
   },
 };
 

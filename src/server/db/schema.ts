@@ -434,3 +434,73 @@ export const routineLogs = sqliteTable(
   },
   (t) => [uniqueIndex("routine_logs_occ_uq").on(t.routineId, t.scheduledFor), index("routine_logs_group_idx").on(t.groupId)],
 );
+
+// ───────────────────────────── Phase 4 ─────────────────────────────
+// Reminders are derived from computed doses/occurrences/tasks/activities by a periodic sweep
+// (src/server/services/reminders.ts); only the notification each recipient received is stored.
+export const NOTIFICATION_CATEGORIES = ["medications", "events", "tasks", "inventory", "routines"] as const;
+export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+export const REMINDER_SOURCES = ["medication", "event", "task", "routine"] as const;
+export type ReminderSource = (typeof REMINDER_SOURCES)[number];
+export const NOTIFICATION_SOURCES = [...REMINDER_SOURCES, "inventory"] as const;
+export const RECIPIENT_MODES = ["responsible", "all", "selected"] as const;
+
+/** Only disabled categories are stored; a missing row means enabled (PRD §12.1). */
+export const notificationPreferences = sqliteTable(
+  "notification_preferences",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    category: text("category", { enum: NOTIFICATION_CATEGORIES }).notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.category] })],
+);
+
+/** Who is reminded about a source, and how early. No row = defaults (responsible person, default lead). */
+export const reminderRules = sqliteTable(
+  "reminder_rules",
+  {
+    id: id(),
+    groupId: groupRef(),
+    sourceType: text("source_type", { enum: REMINDER_SOURCES }).notNull(),
+    sourceId: text("source_id").notNull(), // polymorphic; the sweep ignores rules whose source is gone
+    leadMinutes: integer("lead_minutes").notNull(),
+    recipientMode: text("recipient_mode", { enum: RECIPIENT_MODES }).notNull(),
+    updatedById: userRef("updated_by_id"),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("reminder_rules_source_uq").on(t.sourceType, t.sourceId), index("reminder_rules_group_idx").on(t.groupId)],
+);
+
+export const reminderRuleRecipients = sqliteTable(
+  "reminder_rule_recipients",
+  {
+    ruleId: text("rule_id").notNull().references(() => reminderRules.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    groupId: groupRef(),
+  },
+  (t) => [primaryKey({ columns: [t.ruleId, t.userId] })],
+);
+
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: id(),
+    groupId: groupRef(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    category: text("category", { enum: NOTIFICATION_CATEGORIES }).notNull(),
+    sourceType: text("source_type", { enum: NOTIFICATION_SOURCES }).notNull(),
+    sourceId: text("source_id").notNull(),
+    occurrenceKey: text("occurrence_key").notNull(), // dose/occurrence/due time, or a restock cycle
+    kind: text("kind", { enum: ["reminder", "snooze"] }).notNull().default("reminder"),
+    deliverAt: text("deliver_at").notNull(), // local Israel time; hidden until then
+    params: text("params", { mode: "json" }).$type<{ name: string; pet: string; at?: string }>().notNull(), // rendered in the reader's language
+    readAt: integer("read_at", { mode: "timestamp_ms" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // Each recipient gets one notification per occurrence, however often the sweep runs.
+    uniqueIndex("notifications_once_uq").on(t.userId, t.sourceType, t.sourceId, t.kind, t.occurrenceKey),
+    index("notifications_user_deliver_idx").on(t.userId, t.deliverAt),
+  ],
+);

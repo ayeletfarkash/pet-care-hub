@@ -3,15 +3,15 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–3 merged into `dev` (not pushed).
+- Phases 1–3 merged into `dev` (not pushed). Phase 4 in progress on `feature/phase-4-notifications`: slice 1 of 5 committed.
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 65 Vitest + 19 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-13.
-- Local dev DB migrated for Phase 3 (backup: `data/app.db.bak-pre-phase3`).
+- Tests: 74 Vitest + 20 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Local dev DB migrated through 0004 (backups: `data/app.db.bak-pre-phase3`, `data/app.db.bak-pre-phase4`).
 
 ## Next steps
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
-3. Phase 4 (notifications, automatic tasks, search, insights): architect review first, in a fresh session.
+3. Phase 4 remaining slices, one commit each: (2) snooze + Web Push via `web-push` (service worker, manifest, VAPID env keys) · (3) automatic tasks: low stock → unassigned "Reorder X" task, opt-in appointment prep (1 day before) / follow-up tasks · (4) global search + filters (LIKE, group-scoped, leak test) · (5) rule-based insights + improved dashboard. Design: architect report summarised in [architecture.md](architecture.md) "Phase 4".
 
 ## Open decisions (need the user)
 - Email provider for invitations (currently dev-only console log).
@@ -21,6 +21,13 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-14: Phase 4 slice 1 (notification core)
+- Decisions (user): deliver Phase 4 in slices; add `web-push` for push; low stock notifies all members, reorder task unassigned; appointment prep/follow-up tasks opt-in per event.
+- Decisions (design): reminders derived by an idempotent sweep (unique index, 6 h lookback, no "last run" state); notifications store i18n key + params; one reminder rule per source; preferences store only disabled categories; unassigned sources remind everyone.
+- Lesson: layout and page render in parallel, so a sweep inside a page can't update the header count. The sweep runs in the layout instead, only after a write and at most every 5 s (security review: page loads must not each trigger a whole-DB sweep).
+- Lesson: Playwright `getByRole({ name })` is a substring match; a second "Save notification preferences" button broke old `name: "Save"` lookups. Use `exact: true`.
+- Lesson: working tree files are CRLF (autocrlf); multi-line string edits via scripts must strip `` first.
+- Agents used: architect (design, 9 decisions) · security-reviewer (no Critical/High; Medium sweep cost fixed with the 5 s floor; 3 Lows accepted) · ui-ux-specialist (Major fixed: recipient checkboxes only in "selected" mode; Major rejected: ActionForm already restores focus; Hebrew wording fixed).
 ### 2026-11-13: Phase 3 build
 - Decisions: routines reuse the medication schedule rules and maths; stock estimate computed (days left = quantity ÷ daily use; reorder at threshold, 0, or ≤ 7 days); every stock change is a movement row; a delivered order restocks at most once (partial unique index). No pet_id columns (one pet per group).
 - Lesson: same-millisecond rows need a tiebreaker (`rowid`) when history is ordered by `created_at`.

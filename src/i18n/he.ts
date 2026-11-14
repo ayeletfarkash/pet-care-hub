@@ -3,6 +3,8 @@ import type { Dict } from "./en";
 export const he: Dict = {
   app: { name: "Pet Care Hub", tagline: "טיפול משותף בחיות המחמד שאתם אוהבים" },
   nav: {
+    notifications: "התראות",
+    unread: "{count} חדשות",
     skip: "דילוג לתוכן הראשי",
     main: "ניווט ראשי",
     dashboard: "לוח בקרה",
@@ -59,7 +61,7 @@ export const he: Dict = {
     restore: "שחזור הקבוצה של {pet}",
     deletedOn: "נמחקה בתאריך {date}",
     restored: "הקבוצה שוחזרה.",
-    moreSoon: "התראות פוש ותזכורות חכמות יתווספו בגרסאות הבאות.",
+    moreSoon: "התראות פוש לטלפון יתווספו בגרסה הבאה. תזכורות כבר מופיעות בעמוד ההתראות.",
   },
   species: {
     dog: "כלב", cat: "חתול", bird: "ציפור", rabbit: "ארנב", reptile: "זוחל",
@@ -177,7 +179,7 @@ export const he: Dict = {
   profile: {
     title: "הפרופיל שלכם",
     emailNote: "כתובת הדוא\"ל משמשת להתחברות ולא ניתן לשנות אותה כאן.",
-    notificationsNote: "העדפות התראות יהיו זמינות כשיתווספו תזכורות.",
+    notificationsNote: "בחרו אילו תזכורות תקבלו. ההגדרה משפיעה רק עליכם, לא על חברים אחרים בקבוצה.",
   },
   a11y: {
     open: "נגישות",
@@ -225,6 +227,7 @@ export const he: Dict = {
     routine_has_history: "לפעילות הזו יש רישומים. אפשר לסיים אותה במקום למחוק.",
   },
   validation: {
+    recipients_required: "בחרו לפחות אדם אחד.",
     required: "שדה חובה.",
     email: "הזינו כתובת דוא\"ל תקינה, לדוגמה name@example.com.",
     password_min: "הסיסמה חייבת להכיל לפחות 8 תווים.",
@@ -582,5 +585,42 @@ export const he: Dict = {
     deleteRoutine: "מחיקת פעילות קבועה",
     deleteTitle: "למחוק את {name}?",
     deleteBody: "אי אפשר למחוק פעילות עם רישומים; אפשר לסיים אותה.",
+  },
+  // ───────── Phase 4 ─────────
+  notifications: {
+    title: "התראות",
+    intro: "תזכורות עבורכם מכל הקבוצות שלכם. הן נשמרות כאן גם כשהתראות בטלפון כבויות.",
+    empty: "אין עדיין התראות.",
+    unreadBadge: "חדש",
+    markRead: "סימון כנקרא",
+    markAllRead: "סימון הכול כנקרא",
+    markedRead: "סומן כנקרא.",
+    allMarkedRead: "כל ההתראות סומנו כנקראו.",
+    open: "פתיחה",
+    completeTask: "סימון המשימה כהושלמה",
+    kinds: {
+      medication: "הגיע זמן מנה: {name} עבור {pet}",
+      event: "בקרוב: {name} עבור {pet}",
+      task: "משימה לביצוע: {name} עבור {pet}",
+      routine: "הגיע זמן פעילות: {name} עבור {pet}",
+      inventory: "המלאי עומד להיגמר: {name} עבור {pet}",
+    },
+    prefsTitle: "העדפות התראות",
+    prefsLegend: "שלחו לי תזכורות על",
+    savePrefs: "שמירת העדפות התראות",
+    categories: { medications: "תרופות וטיפולים", events: "תורים ואירועים", tasks: "משימות", inventory: "מלאי ומוצרים", routines: "שגרה ופעילויות" },
+    rule: {
+      title: "תזכורות",
+      readOnly: "{lead}, אל {who}.",
+      lead: "מתי להזכיר",
+      leads: { "0": "בזמן המתוכנן", "15": "15 דקות לפני", "60": "שעה לפני", "1440": "יום לפני" },
+      who: "מי יקבל את התזכורת",
+      modes: { responsible: "האדם האחראי (כל החברים, אם אין אחראי)", all: "כל חברי הקבוצה", selected: "חברים נבחרים" },
+      whoShort: { responsible: "האדם האחראי", all: "כל חברי הקבוצה", selected: "חברים נבחרים" },
+      recipients: "חברים לתזכורת",
+      hint: "התזכורת תישלח רק לחברים שסוג התזכורת הזה מופעל בהעדפות שלהם.",
+      save: "שמירת תזכורות",
+    },
+    ruleSaved: "הגדרות התזכורות נשמרו.",
   },
 };

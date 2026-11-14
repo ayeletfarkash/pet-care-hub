@@ -14,6 +14,7 @@ import { CommentForm, TransferForm } from "@/components/forms/care-forms";
 import { commentAction, decideTransferAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
 import { dueText } from "../due";
 import { loadGroup } from "../../load";
+import { ReminderSection } from "@/components/reminder-section";
 
 export default async function TaskPage({ params, searchParams }: { params: Promise<{ groupId: string; taskId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, taskId } = await params;
@@ -81,6 +82,8 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
           )}
         </section>
       )}
+
+      {open && <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="task" sourceId={taskId} />}
 
       <section aria-labelledby="comments-h" className="mb-8">
         <h2 id="comments-h" className="mb-3 text-2xl font-bold">{k.comments}</h2>

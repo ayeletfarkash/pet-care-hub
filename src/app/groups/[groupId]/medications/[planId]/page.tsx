@@ -14,6 +14,7 @@ import { ActionForm } from "@/components/forms/action-form";
 import { deletePlanAction, endPlanAction, removeDoseAction } from "@/app/actions/medications";
 import { planSummary } from "../summary";
 import { loadGroup } from "../../load";
+import { ReminderSection } from "@/components/reminder-section";
 
 export default async function PlanPage({ params, searchParams }: { params: Promise<{ groupId: string; planId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, planId } = await params;
@@ -50,6 +51,8 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
         {p.instructions && <><dt className="font-semibold text-muted">{m.instructions}</dt><dd className="whitespace-pre-wrap">{p.instructions}</dd></>}
         {p.notes && <><dt className="font-semibold text-muted">{t.ui.notes}</dt><dd className="whitespace-pre-wrap">{p.notes}</dd></>}
       </dl>
+
+      <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="medication" sourceId={planId} />
 
       <section aria-labelledby="hist-h" className="mb-8">
         <h2 id="hist-h" className="mb-3 text-2xl font-bold">{m.history}</h2>

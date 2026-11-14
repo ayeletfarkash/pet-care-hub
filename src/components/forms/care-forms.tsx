@@ -19,7 +19,7 @@ function Hidden({ fields }: { fields: Record<string, string> }) {
 }
 
 /** Checkbox group with a real fieldset/legend and an associated error (WCAG 1.3.1, 3.3.1). */
-function CheckboxGroup({ name, legendText, options, checked, error, idPrefix }: {
+export function CheckboxGroup({ name, legendText, options, checked, error, idPrefix }: {
   name: string; legendText: string; options: { value: string; label: string }[]; checked: string[]; error?: string; idPrefix: string;
 }) {
   return (
