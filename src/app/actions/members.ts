@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
+import { inviteLink } from "@/server/invite-link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { changeRole, removeMember } from "@/server/services/members";
@@ -19,11 +20,6 @@ import { INVITE_COOKIE } from "./invite-cookie";
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 const membersPath = (g: string) => `/groups/${g}/members`;
 
-async function inviteLink(token: string) {
-  const h = await headers();
-  const base = process.env.APP_URL ?? `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
-  return `${base}/invite/${token}`;
-}
 
 export async function changeRoleAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();

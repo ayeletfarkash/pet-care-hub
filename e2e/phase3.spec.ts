@@ -74,6 +74,9 @@ test.describe("Phase 3 inventory and routines", () => {
     await admin.goto(`/groups/${groupId}/routines/new`);
     await admin.getByLabel(/^Activity/).fill("Morning walk");
     await admin.getByLabel("Responsible person").selectOption({ label: "Cai Caregiver" });
+    await expect(admin.getByLabel("Time 2")).toHaveCount(0);
+    await admin.getByRole("button", { name: "Add time" }).click();
+    await expect(admin.getByLabel("Time 2")).toBeFocused();
     await admin.getByLabel("Time 1").fill("00:00");
     await admin.getByLabel(/^Start date/).fill(daysAgo(1));
     await admin.getByRole("button", { name: "Save" }).click();

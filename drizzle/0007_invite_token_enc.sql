@@ -1,0 +1,1 @@
+ALTER TABLE `invitations` ADD `token_enc` text;

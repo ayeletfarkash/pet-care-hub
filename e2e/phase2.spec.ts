@@ -28,6 +28,10 @@ test.describe("Phase 2 daily care", () => {
     await admin.getByLabel(/^Medication or treatment/).fill("Apoquel");
     await admin.getByLabel(/^Dosage/).fill("1 tablet (16 mg)");
     await admin.getByLabel("Responsible caregiver").selectOption({ label: "Cai Caregiver" });
+    await expect(admin.getByLabel("Dose time 3")).toBeVisible();
+    await expect(admin.getByLabel("Dose time 4")).toHaveCount(0);
+    await admin.getByRole("button", { name: "Add time" }).click();
+    await expect(admin.getByLabel("Dose time 4")).toBeFocused();
     await admin.getByLabel("Dose time 1").fill("00:00");
     await admin.getByLabel(/^Start date/).fill(yesterday());
     await admin.getByRole("button", { name: "Save" }).click();

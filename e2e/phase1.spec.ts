@@ -18,6 +18,18 @@ test.describe("Phase 1 acceptance", () => {
     const link = await admin.getByLabel("Invitation link").inputValue();
     expect(link).toContain("/invite/");
 
+    // Active invitation row: copy, WhatsApp and email share the same link
+    await admin.reload();
+    const row = admin.getByRole("row", { name: /One-time link/ });
+    const wa = await row.getByRole("link", { name: /^Share on WhatsApp/ }).getAttribute("href");
+    expect(wa?.startsWith("https://wa.me/?text=") && wa.includes(encodeURIComponent(link))).toBe(true);
+    const mail = await row.getByRole("link", { name: /^Share by email/ }).getAttribute("href");
+    expect(mail?.startsWith("mailto:?subject=") && mail.includes(encodeURIComponent(link))).toBe(true);
+    await adminCtx.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await row.getByRole("button", { name: /^Copy link/ }).click();
+    await expect(admin.locator("#app-live-region")).toHaveText("Link copied.");
+    expect(await admin.evaluate(() => navigator.clipboard.readText())).toBe(link);
+
     // Invitee registers through the link and is added automatically
     const userCtx = await browser.newContext();
     const user = await userCtx.newPage();
@@ -205,6 +217,29 @@ test.describe("Accessibility", () => {
       await page.goto(path);
       await expectNoA11yViolations(page);
     }
+  });
+
+  test("profile: photo saves on select and removes by icon; estimated age in years and months", async ({ page }) => {
+    await register(page, "Pia Profile", uniqueEmail("prof"));
+    const groupId = await createPet(page, "Momo", "cat");
+    await page.goto(`/groups/${groupId}/edit`);
+    await expect(page.getByText("Identifying characteristics")).toHaveCount(0);
+    // 1×1 PNG
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    await page.getByLabel("Upload photo").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: png });
+    await expect(page.getByRole("img", { name: "Photo of Momo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Upload photo" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Remove photo" }).click();
+    await expect(page.getByRole("img", { name: "Photo of Momo" })).toHaveCount(0);
+    await expect(page.getByLabel("Upload photo")).toBeFocused();
+
+    await page.getByLabel("Years").fill("1");
+    await page.getByLabel("Months").selectOption("11");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("~1 year, 11 months (estimated)")).toBeVisible();
+    await page.goto(`/groups/${groupId}/edit`);
+    await expect(page.getByLabel("Years")).toHaveValue("1");
+    await expect(page.getByLabel("Months")).toHaveValue("11");
   });
 
   test("automated WCAG checks: signed-in pages, incl. high contrast and open dialog", async ({ page }) => {

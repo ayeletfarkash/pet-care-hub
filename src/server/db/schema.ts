@@ -97,6 +97,7 @@ export const invitations = sqliteTable(
     id: id(),
     groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull().unique(),
+    tokenEnc: text("token_enc"), // AES-GCM encrypted token, so active links can be shared again; null for older rows
     role: text("role", { enum: ROLES }).notNull().default("caregiver"),
     email: text("email"), // set for email invitations; only that address may accept
     reusable: integer("reusable", { mode: "boolean" }).notNull().default(false),

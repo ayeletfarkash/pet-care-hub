@@ -5,7 +5,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 ## Current state
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 85 Vitest + 25 Playwright (navigation spec added; medical E2E removed) (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Tests: 87 Vitest + 26 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-21.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -24,6 +24,13 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-21: Profile, invitations and form improvements (branch `feature/phase2-ui-improvements`)
+- Decision (user): invitation tokens are now also stored AES-256-GCM encrypted (`invitations.token_enc`, migration 0007, key from `INVITE_LINK_SECRET`, required in production) so every active invitation gets Copy / WhatsApp / email actions. Lookups still use the hash. Older invitations show "Link not available".
+- Invite UI: one compact form (role, expiry, reusable). The email-invite form is gone; the server's email-bound invite path and console mailer remain for a future email provider.
+- Profile: photo saves on file select (pencil = choose/replace, trash = remove; focus returns to the pencil). Estimated age = years + months (0–11), still stored as fractional years. Identifying characteristics removed from form/view and validation; the DB column and old data are kept.
+- Medication form shows 3 time fields, routines 1, with "Add time" up to 6. End-date and times hints removed.
+- Dev DB needs `npm run db:migrate` (0007) before `npm run dev`.
+- Agents used: security-reviewer (no Critical/High; Medium fixed: secret fails closed outside development/test; Lows accepted: no AAD/length checks, link sent to wa.me/mailto is a user-initiated share, token in the auth-gated dynamic admin page).
 ### 2026-11-14: Navigation and page structure (branch `feature/navigation-profile`, not committed)
 - Decisions (user): Profile section lives inside each pet (tabs "Pet profile" / "Group members"); the pet section tabs (not the header links) move to a bottom bar.
 - Design: bottom bar is `position: fixed`, rendered after the content (focus order = visual order), scrolls sideways on phones and scrolls the current item into view; `body/html:has([data-bottom-bar])` add bottom padding + scroll-padding so the footer and focused controls stay clear (WCAG 2.4.11). Profile tabs are links with `aria-current`, not an ARIA tablist (separate URLs).

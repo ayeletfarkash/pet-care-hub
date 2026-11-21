@@ -47,9 +47,10 @@ export const petSchema = z
     sex: z.enum(SEXES).catch("unknown"),
     birthDate: isoDate.refine((v) => v == null || v <= new Date().toISOString().slice(0, 10), "future_date"),
     estimatedAgeYears: optNumber(100),
+    estimatedAgeMonths: z.string().trim().optional()
+      .refine((v) => !v || /^([0-9]|1[01])$/.test(v), "invalid_number").transform((v) => (v ? Number(v) : 0)),
     weightKg: optNumber(2000),
     color: opt(80),
-    identifyingMarks: opt(500),
     vetName: opt(),
     vetClinic: opt(),
     vetPhone: opt(40),
@@ -62,7 +63,14 @@ export const petSchema = z
   .superRefine((v, ctx) => {
     if (v.species === "other" && !v.speciesOther)
       ctx.addIssue({ code: "custom", path: ["speciesOther"], message: "required" });
-  });
+    if (v.estimatedAgeYears != null && !Number.isInteger(v.estimatedAgeYears))
+      ctx.addIssue({ code: "custom", path: ["estimatedAgeYears"], message: "invalid_number" });
+  })
+  // Stored as fractional years (existing column); the form splits it back into years + months.
+  .transform(({ estimatedAgeMonths: m, ...v }) => ({
+    ...v,
+    estimatedAgeYears: v.estimatedAgeYears == null && !m ? null : (v.estimatedAgeYears ?? 0) + m / 12,
+  }));
 export type PetInput = z.infer<typeof petSchema>;
 
 export const invitationSchema = z.object({
