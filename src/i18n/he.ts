@@ -246,7 +246,7 @@ export const he: Dict = {
   },
   notFound: { title: "הדף לא נמצא", body: "לא מצאנו את הדף, או שאין לכם גישה אליו.", home: "מעבר ללוח הבקרה" },
   ui: { edit: "עריכה", delete: "מחיקה", formerMember: "חבר/ה לשעבר", nobody: "לא שויך לאף אחד", by: "על ידי", notes: "הערות", view: "צפייה" },
-  groupNav: { label: "אזורים עבור {pet}", profile: "פרופיל", medical: "רפואי", medications: "תרופות", calendar: "לוח שנה", tasks: "משימות", members: "חברים", inventory: "מלאי", orders: "הזמנות", routines: "שגרה" },
+  groupNav: { label: "אזורים עבור {pet}", profile: "פרופיל", medications: "תרופות", calendar: "לוח שנה", tasks: "משימות", inventory: "מלאי", orders: "הזמנות", routines: "שגרה", profileTabs: "פרופיל של {pet}", petProfile: "פרופיל חיית המחמד", groupMembers: "חברי הקבוצה" },
   weekdays: { short: ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"], long: ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"] },
   medical: {
     title: "היסטוריה רפואית",

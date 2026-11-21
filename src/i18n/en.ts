@@ -245,7 +245,7 @@ export const en = {
   notFound: { title: "Page not found", body: "We couldn't find that page, or you don't have access to it.", home: "Go to dashboard" },
   // ───────── Phase 2 ─────────
   ui: { edit: "Edit", delete: "Delete", formerMember: "Former member", nobody: "Nobody assigned", by: "By", notes: "Notes", view: "View" },
-  groupNav: { label: "Sections for {pet}", profile: "Profile", medical: "Medical", medications: "Medications", calendar: "Calendar", tasks: "Tasks", members: "Members", inventory: "Inventory", orders: "Orders", routines: "Routines" },
+  groupNav: { label: "Sections for {pet}", profile: "Profile", medications: "Medications", calendar: "Calendar", tasks: "Tasks", inventory: "Inventory", orders: "Orders", routines: "Routines", profileTabs: "Profile of {pet}", petProfile: "Pet profile", groupMembers: "Group members" },
   weekdays: { short: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], long: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] },
   medical: {
     title: "Medical history",

@@ -68,6 +68,13 @@ html.contrast-high {
     font-family: var(--font-sans);
     line-height: 1.6;
   }
+  /* Fixed bottom section bar: keep the footer and keyboard-focused elements clear of it (WCAG 2.4.11). */
+  html:has([data-bottom-bar]) {
+    scroll-padding-bottom: 5rem;
+  }
+  body:has([data-bottom-bar]) {
+    padding-bottom: 4.5rem;
+  }
   a { color: var(--link); text-underline-offset: 0.2em; }
   a:hover { text-decoration: underline; }
   /* Visible focus for every interactive element (WCAG 2.4.7 / 2.4.13). */

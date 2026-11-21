@@ -294,7 +294,7 @@ export const pushSubscriptionSchema = z.object({
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
 // ───────── Search (PRD §14) ─────────
-export const SEARCH_TYPES = ["pets", "tasks", "events", "medical", "medications", "products", "orders"] as const;
+export const SEARCH_TYPES = ["pets", "tasks", "events", "medications", "products", "orders"] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
 const optDate = z.string().trim().optional().transform((v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined));
 /** GET parameters: anything malformed is dropped rather than failing the page. */

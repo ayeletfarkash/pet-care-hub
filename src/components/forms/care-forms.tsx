@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type RefObject } from "react";
 import type { FormState } from "@/app/actions/form";
-import { EVENT_TYPES, INVENTORY_TYPES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, SCHEDULE_TYPES, TASK_PRIORITIES, TASK_RECURRENCES } from "@/server/db/schema";
+import { EVENT_TYPES, INVENTORY_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, SCHEDULE_TYPES, TASK_PRIORITIES, TASK_RECURRENCES } from "@/server/db/schema";
 import { fmt, type Dict } from "@/i18n";
 import { CheckboxField, SelectField, TextareaField, TextField } from "../ui/fields";
 import { SubmitButton } from "../ui/buttons";
@@ -44,59 +44,6 @@ function useResetOnSuccess(state: FormState, ref: RefObject<HTMLFormElement | nu
 }
 
 const memberOptions = (t: Dict, members: Member[]) => [{ value: "", label: t.ui.nobody }, ...members.map((m) => ({ value: m.userId, label: m.name }))];
-
-// ─────────── Medical ───────────
-export function MedicalForm({ t, action, hidden, initial, submitLabel, withFiles, today }: {
-  t: Dict; action: Action; hidden: Record<string, string>; initial?: Record<string, unknown>; submitLabel: string; withFiles?: boolean; today: string;
-}) {
-  const { state, formAction, ref, f } = useForm(action, initial ?? { date: today });
-  const m = t.medical, req = t.common.required;
-  return (
-    <form ref={ref} action={formAction} noValidate>
-      <FormStatus state={state} formRef={ref} />
-      <Hidden fields={hidden} />
-      <p className="mb-4 text-sm text-muted">{t.common.requiredLegend}</p>
-      <div className={card}>
-        <div className="grid gap-x-4 sm:grid-cols-2">
-          <SelectField {...f("type")} label={m.type} required requiredLabel={req}
-            options={[{ value: "", label: t.common.choose }, ...MEDICAL_TYPES.map((x) => ({ value: x, label: m.types[x] }))]} />
-          <TextField {...f("date")} type="date" max={today} label={m.date} required requiredLabel={req} />
-        </div>
-        <TextField {...f("title")} label={m.titleField} required requiredLabel={req} />
-        <TextField {...f("provider")} label={m.provider} />
-        <TextareaField {...f("description")} label={m.description} />
-        <TextareaField {...f("details")} label={m.details} hint={m.detailsHint} />
-        <TextareaField {...f("notes")} label={t.ui.notes} />
-        {withFiles && <FileInput t={t} />}
-      </div>
-      <SubmitButton pendingLabel={t.common.saving}>{submitLabel}</SubmitButton>
-    </form>
-  );
-}
-
-function FileInput({ t }: { t: Dict }) {
-  return (
-    <div className="mb-4">
-      <label htmlFor="files" className="block font-semibold">{t.medical.files}</label>
-      <p id="files-hint" className="text-sm text-muted">{t.medical.filesHint}</p>
-      <input id="files" name="files" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp" aria-describedby="files-hint"
-        className="mt-1 block w-full rounded-lg border-2 border-line p-2 file:me-3 file:min-h-10 file:rounded-md file:border-0 file:bg-accent file:px-3 file:font-semibold" />
-    </div>
-  );
-}
-
-export function DocumentsForm({ t, action, hidden }: { t: Dict; action: Action; hidden: Record<string, string> }) {
-  const { state, formAction, ref } = useForm(action);
-  useResetOnSuccess(state, ref);
-  return (
-    <form ref={ref} action={formAction}>
-      <FormStatus state={state} formRef={ref} />
-      <Hidden fields={hidden} />
-      <FileInput t={t} />
-      <SubmitButton variant="secondary" pendingLabel={t.common.saving}>{t.medical.upload}</SubmitButton>
-    </form>
-  );
-}
 
 // ─────────── Medication plans ───────────
 export function PlanForm({ t, action, hidden, initial, members, submitLabel, today }: {

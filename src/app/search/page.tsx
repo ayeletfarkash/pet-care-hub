@@ -25,7 +25,6 @@ function statusLabel(t: Dict, r: SearchResult) {
   if (!r.status) return null;
   if (r.type === "tasks") return t.tasks.statuses[r.status as keyof Dict["tasks"]["statuses"]];
   if (r.type === "orders") return t.orders.statuses[r.status as keyof Dict["orders"]["statuses"]];
-  if (r.type === "medical") return t.medical.types[r.status as keyof Dict["medical"]["types"]];
   if (r.type === "medications") return r.status === "active" ? t.search.active : t.search.ended;
   return null;
 }

@@ -1,4 +1,4 @@
-import { BackLink } from "@/components/back-link";
+import { ProfileTabs } from "@/components/profile-tabs";
 import { listMembers } from "@/server/services/members";
 import { listActiveInvitations } from "@/server/services/invitations";
 import { fmt, formatDate } from "@/i18n";
@@ -28,7 +28,7 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
 
   return (
     <>
-      <BackLink href={`/groups/${groupId}`} label={pet.name} />
+      <ProfileTabs t={t} groupId={groupId} pet={pet.name} current="members" />
       <h1 className="mb-6 text-3xl font-bold">{fmt(m.title, { pet: pet.name })}</h1>
 
       <section aria-labelledby="members-h">

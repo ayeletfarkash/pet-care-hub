@@ -39,7 +39,7 @@ export const statement: Record<Locale, Statement> = {
     testing: [
       "Automated accessibility checks (axe-core, WCAG 2.2 A/AA rules) on the main pages in Hebrew and English.",
       "Automated keyboard-only tests of registration, login, creating a pet and the accessibility toolbar.",
-      "Automated accessibility checks of the medical history, medications, calendar and task pages in Hebrew and English.",
+      "Automated accessibility checks of the medications, calendar and task pages in Hebrew and English.",
     ],
     limitationsH: "Known limitations",
     limitations: [
@@ -77,7 +77,7 @@ export const statement: Record<Locale, Statement> = {
     testing: [
       "בדיקות נגישות אוטומטיות (axe-core, כללי WCAG 2.2 A/AA) בעמודים המרכזיים, בעברית ובאנגלית.",
       "בדיקות אוטומטיות של שימוש במקלדת בלבד: הרשמה, התחברות, יצירת חיית מחמד וסרגל הנגישות.",
-      "בדיקות נגישות אוטומטיות של עמודי ההיסטוריה הרפואית, התרופות, לוח השנה והמשימות, בעברית ובאנגלית.",
+      "בדיקות נגישות אוטומטיות של עמודי התרופות, לוח השנה והמשימות, בעברית ובאנגלית.",
     ],
     limitationsH: "מגבלות ידועות",
     limitations: [

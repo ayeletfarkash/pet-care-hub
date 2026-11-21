@@ -49,26 +49,6 @@ test.describe("Phase 2 daily care", () => {
     await expect(care.getByRole("heading", { name: "Page not found" })).toBeVisible();
   });
 
-  test("medical history: caregiver adds a record with a PDF; documents are member-only", async ({ browser }) => {
-    const { care, groupId } = await team(browser);
-    await care.goto(`/groups/${groupId}/medical/new`);
-    await care.getByLabel(/^Type/).selectOption("vaccination");
-    await care.getByLabel(/^Title/).fill("Rabies vaccine");
-    await care.getByLabel("Attach files").setInputFiles({ name: "certificate.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% test\n") });
-    await care.getByRole("button", { name: "Save" }).click();
-    await expect(care.getByRole("heading", { level: 1, name: "Rabies vaccine" })).toBeVisible();
-    await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0); // caregivers can't edit
-    const href = await care.getByRole("link", { name: /Download certificate\.pdf/ }).getAttribute("href");
-    const res = await care.request.get(href!);
-    expect(res.status()).toBe(200);
-    expect(res.headers()["content-type"]).toBe("application/pdf");
-    expect(res.headers()["x-content-type-options"]).toBe("nosniff");
-
-    const outsider = await (await browser.newContext()).newPage();
-    await register(outsider, "Olly Outsider", uniqueEmail("p2o"));
-    expect((await outsider.request.get(href!)).status()).toBe(404);
-  });
-
   test("tasks and calendar: assignment shows on the dashboard; caregiver completes; events can be completed", async ({ browser }) => {
     const { admin, care, groupId } = await team(browser);
     await admin.goto(`/groups/${groupId}/tasks/new`);
@@ -108,7 +88,7 @@ test.describe("Phase 2 daily care", () => {
   test("automated WCAG checks on Phase 2 pages (incl. RTL)", async ({ browser }) => {
     const { admin, groupId } = await team(browser);
     const base = `/groups/${groupId}`;
-    for (const p of ["/medical", "/medical/new", "/medications", "/medications/new", "/calendar", "/events/new", "/tasks", "/tasks/new"]) {
+    for (const p of ["/medications", "/medications/new", "/calendar", "/events/new", "/tasks", "/tasks/new"]) {
       await admin.goto(base + p);
       await expectNoA11yViolations(admin);
     }
