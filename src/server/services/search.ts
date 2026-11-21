@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { db } from "../db";
-import { events, inventoryItems, medicalRecords, medicationPlans, memberships, orders, pets, taskAssignees, tasks, users } from "../db/schema";
+import { events, inventoryItems, medicationPlans, memberships, orders, pets, taskAssignees, tasks, users } from "../db/schema";
 import { todayLocal } from "../schedule";
 import { SEARCH_MIN_CHARS, SEARCH_TYPES, type SearchInput, type SearchType } from "../validation";
 import { listUserGroups } from "./groups";
@@ -30,7 +30,7 @@ const inRange = (col: SQLiteColumn, from?: string, to?: string) =>
 function typesFor(f: SearchInput): SearchType[] {
   const withStatus: SearchType[] = ["tasks", "events", "medications", "orders"];
   const withAssignee: SearchType[] = ["tasks", "events", "medications"];
-  const withDate: SearchType[] = ["tasks", "events", "medical", "medications", "orders"];
+  const withDate: SearchType[] = ["tasks", "events", "medications", "orders"];
   return SEARCH_TYPES.filter((t) =>
     (!f.type || f.type === t) && (!f.status || withStatus.includes(t)) && (!f.assignee || withAssignee.includes(t)) && (!(f.from || f.to) || withDate.includes(t)));
 }
@@ -40,7 +40,7 @@ export async function searchAll(userId: string, f: SearchInput) {
   const scope = mine.map((g) => g.groupId).filter((id) => !f.group || id === f.group);
   const empty = { results: [] as SearchResult[], more: [] as SearchType[] };
   if (f.q.length < SEARCH_MIN_CHARS || scope.length === 0) return empty;
-  rateLimit(`search:${userId}`, 60, 60_000); // each search runs up to 7 LIKE scans
+  rateLimit(`search:${userId}`, 60, 60_000); // each search runs up to 6 LIKE scans
   const q = f.q, today = todayLocal(), n = SEARCH_LIMIT + 1;
   const types = new Set(typesFor(f));
   const run = async (t: SearchType, fn: () => Promise<SearchResult[]>) => (types.has(t) ? fn() : []);
@@ -74,9 +74,6 @@ export async function searchAll(userId: string, f: SearchInput) {
         )).orderBy(desc(events.startsAt)).limit(n)).map((r) => ({ ...r, type: "events" as const, status: null }));
     }),
 
-    run("medical", async () => (await db.select({ id: medicalRecords.id, groupId: medicalRecords.groupId, title: medicalRecords.title, date: medicalRecords.date, status: medicalRecords.type }).from(medicalRecords)
-      .where(and(inArray(medicalRecords.groupId, scope), contains(q, medicalRecords.title, medicalRecords.description, medicalRecords.provider, medicalRecords.details, medicalRecords.notes), inRange(medicalRecords.date, f.from, f.to)))
-      .orderBy(desc(medicalRecords.date)).limit(n)).map((r) => ({ ...r, type: "medical" as const }))),
 
     run("medications", async () => {
       const active = or(isNull(medicationPlans.endDate), gte(medicationPlans.endDate, today));
@@ -116,7 +113,7 @@ export async function searchFilterOptions(userId: string) {
 }
 
 export const resultHref = (r: Pick<SearchResult, "type" | "id" | "groupId">) => {
-  const seg: Record<SearchType, string> = { pets: "", tasks: "tasks", events: "events", medical: "medical", medications: "medications", products: "inventory", orders: "orders" };
+  const seg: Record<SearchType, string> = { pets: "", tasks: "tasks", events: "events", medications: "medications", products: "inventory", orders: "orders" };
   return seg[r.type] ? `/groups/${r.groupId}/${seg[r.type]}/${r.id}` : `/groups/${r.groupId}`;
 };
 

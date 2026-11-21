@@ -5,7 +5,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 ## Current state
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 85 Vitest + 23 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
+- Tests: 85 Vitest + 25 Playwright (navigation spec added; medical E2E removed) (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -24,6 +24,11 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-14: Navigation and page structure (branch `feature/navigation-profile`, not committed)
+- Decisions (user): Profile section lives inside each pet (tabs "Pet profile" / "Group members"); the pet section tabs (not the header links) move to a bottom bar.
+- Design: bottom bar is `position: fixed`, rendered after the content (focus order = visual order), scrolls sideways on phones and scrolls the current item into view; `body/html:has([data-bottom-bar])` add bottom padding + scroll-padding so the footer and focused controls stay clear (WCAG 2.4.11). Profile tabs are links with `aria-current`, not an ARIA tablist (separate URLs).
+- Medical History: pages, server actions and form removed; `medical_records`/`attachments` data, `services/medical.ts`, its unit tests and the auth-checked download route kept; removed from search types. Insights "medical" category is unaffected (it covers doses/treatment events).
+- Known, pre-existing: members page overflows horizontally at 375 px (tables/invite section), not caused by the new nav.
 ### 2026-11-14: Phase 4 slice 5 (insights + dashboard) — Phase 4 complete
 - Decisions: insights computed on read; "keeps slipping" = 3 of last 5 instances in 4 weeks; dashboard shows only actionable kinds; no Insights header link (reflow).
 - Agents used: ui-ux-specialist (Majors fixed: header crowding, glance link names include the pet, unused intro shown; fieldset/legend, "Apply filters", filtered empty state, full lists on the insights page, Hebrew labels).
@@ -45,7 +50,8 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Decisions (design): reminders derived by an idempotent sweep (unique index, 6 h lookback, no "last run" state); notifications store i18n key + params; one reminder rule per source; preferences store only disabled categories; unassigned sources remind everyone.
 - Lesson: layout and page render in parallel, so a sweep inside a page can't update the header count. The sweep runs in the layout instead, only after a write and at most every 5 s (security review: page loads must not each trigger a whole-DB sweep).
 - Lesson: Playwright `getByRole({ name })` is a substring match; a second "Save notification preferences" button broke old `name: "Save"` lookups. Use `exact: true`.
-- Lesson: working tree files are CRLF (autocrlf); multi-line string edits via scripts must strip `` first.
+- Lesson: working tree files are CRLF (autocrlf); multi-line string edits via scripts must strip `
+` first.
 - Agents used: architect (design, 9 decisions) · security-reviewer (no Critical/High; Medium sweep cost fixed with the 5 s floor; 3 Lows accepted) · ui-ux-specialist (Major fixed: recipient checkboxes only in "selected" mode; Major rejected: ActionForm already restores focus; Hebrew wording fixed).
 ### 2026-11-13: Phase 3 build
 - Decisions: routines reuse the medication schedule rules and maths; stock estimate computed (days left = quantity ÷ daily use; reorder at threshold, 0, or ≤ 7 days); every stock change is a movement row; a delivered order restocks at most once (partial unique index). No pet_id columns (one pet per group).

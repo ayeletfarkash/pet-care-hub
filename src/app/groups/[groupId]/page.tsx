@@ -2,6 +2,7 @@ import { fmt, formatDate, formatNumber, type Dict } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { Notice } from "@/components/notice";
 import { SpeciesIcon } from "@/components/species-icon";
+import { ProfileTabs } from "@/components/profile-tabs";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
@@ -48,6 +49,7 @@ export default async function GroupPage({
 
   return (
     <>
+      <ProfileTabs t={t} groupId={groupId} pet={pet.name} current="profile" />
       <Notice t={t} notice={sp.notice} />
       <div className="mb-8 flex flex-wrap items-center gap-5">
         {pet.photoFile ? (
@@ -64,10 +66,7 @@ export default async function GroupPage({
           </p>
           <p className="mt-1 text-sm font-semibold">{fmt(t.group.yourRole, { role: t.roles[role] })}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <LinkButton variant="secondary" href={`/groups/${groupId}/members`}>{t.group.members}</LinkButton>
-          {isAdmin && <LinkButton href={`/groups/${groupId}/edit`}>{p.edit}</LinkButton>}
-        </div>
+        {isAdmin && <LinkButton href={`/groups/${groupId}/edit`}>{p.edit}</LinkButton>}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

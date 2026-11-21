@@ -9,22 +9,20 @@ export default async function GroupLayout({ children, params }: { children: Reac
   const n = t.groupNav;
   return (
     <>
+      {children}
       <GroupNav
         groupId={groupId}
         label={fmt(n.label, { pet: pet.name })}
         items={[
-          { href: "", label: n.profile },
-          { href: "/medical", label: n.medical },
+          { href: "", label: n.profile, also: ["/edit", "/members"] },
           { href: "/medications", label: n.medications },
-          { href: "/calendar", label: n.calendar, also: "/events" },
+          { href: "/calendar", label: n.calendar, also: ["/events"] },
           { href: "/tasks", label: n.tasks },
           { href: "/routines", label: n.routines },
           { href: "/inventory", label: n.inventory },
           { href: "/orders", label: n.orders },
-          { href: "/members", label: n.members },
         ]}
       />
-      {children}
     </>
   );
 }

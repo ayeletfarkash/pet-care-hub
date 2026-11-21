@@ -61,7 +61,7 @@ Pet photos: magic-byte check (JPEG/PNG/WebP), 5 MB cap, generated filename under
 ## Phase 2: daily care
 | Module | Tables | Notes |
 |---|---|---|
-| Medical | `medical_records`, `attachments` | Both roles add records/documents; Admins edit/delete. Files: magic-byte check (PDF/JPG/PNG/WebP), 10 MB, removed from disk with their rows; served by `/groups/<id>/attachments/<aid>` |
+| Medical | `medical_records`, `attachments` | Both roles add records/documents; Admins edit/delete. Files: magic-byte check (PDF/JPG/PNG/WebP), 10 MB, removed from disk with their rows; served by `/groups/<id>/attachments/<aid>`. **No user-facing pages since the navigation update (2026-11-14):** data, service and download route kept; search no longer returns medical records |
 | Medications | `medication_plans`, `medication_administrations` | **Doses are computed** from the plan (`schedule.ts`), never stored. An administration row (unique per plan + scheduled time) is the only proof a dose was given. A dose may be confirmed ≤ 60 min early; Caregivers can record doses up to 48 h back, older ones need an Admin. Plans with history can be ended, not deleted |
 | Events | `events`, `event_occurrence_status` | Occurrences computed from a recurrence rule; completed/cancelled stored per occurrence and validated against the rule |
 | Tasks | `tasks`, `task_assignees`, `task_comments`, `task_history`, `task_transfer_requests` | Overdue is computed. Recurring tasks need a due date; completing one inserts the next instance (`UNIQUE(series_id, due_at)` makes it idempotent); cancelling ends the series. One pending transfer per task (partial unique index) |
@@ -136,7 +136,7 @@ Task text is stored, so it is written in the language of the group's first Admin
 | Piece | Where | Notes |
 |---|---|---|
 | Service | `services/search.ts` | Scope = `listUserGroups(userId)` (current, non-deleted groups), computed server-side; the group filter can only narrow it. Every query has `group_id IN (scope)`. `LIKE %q% ESCAPE` with `\ % _` escaped; min 2 chars, max 100; 20 results per type; 60 searches/min per user. Both roles read everything in their groups, so no per-type role filter |
-| Types | pets, tasks, events, medical, medications, products, orders | Filters: type, pet/group, status (open = open task / upcoming or recurring event / active plan / order in progress), responsible person (tasks, events, plans), date range (due/start/record/order date). A filter drops types it can't apply to |
+| Types | pets, tasks, events, medications, products, orders | Filters: type, pet/group, status (open = open task / upcoming or recurring event / active plan / order in progress), responsible person (tasks, events, plans), date range (due/start/order date). A filter drops types it can't apply to |
 | Page | `/search` (GET form in `<search>`, header link) | Filters live in the URL. The result summary is an `<h2>` that receives focus on load (a live region isn't announced after a full page load) |
 
 Known limit: recurring events match on their first date only for the date filter.
