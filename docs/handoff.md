@@ -6,7 +6,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
 - Tests: 90 Vitest + 27 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-22.
-- Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
+- Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
 ## Next steps
@@ -31,7 +31,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Completion is a checkbox (`forms/task-checkbox.tsx`): check = complete, uncheck = reopen; history rows kept. The inbox's "Mark as completed" button is unchanged.
 - Custom reminders: `reminder_rules.remind_at` (tasks only; overrides lead time; must be in the future). Add Task form has a Reminder choice (presets + custom); the task page's reminder card offers the same. Sweep fires it once (`occurrenceKey = custom:<time>`), also for undated tasks; preferences still apply. `ReminderAvailability` warns when push is unsupported/blocked or task reminders are off.
 - Lesson: React resets a form after an action; a `<select>` goes back to its mount-time default even when controlled. Remount it with the echoed value (`key`) — see `reminder-fields.tsx`. The TaskForm recurrence select likely has the same latent issue.
-- Dev DB needs `npm run db:migrate` (0008).
+- Local dev DB migrated to 0008 on 2026-11-22 (backup `data/app.db.bak-pre-tasks-delete`).
 - Agents used: security-reviewer (no Critical/High/Medium; Low fixed: custom reminder capped at 1 year; Low accepted: deleted auto-task stays dismissed for that cycle key, group-scoped).
 ### 2026-11-21: Profile, invitations and form improvements (branch `feature/phase2-ui-improvements`)
 - Decision (user): invitation tokens are now also stored AES-256-GCM encrypted (`invitations.token_enc`, migration 0007, key from `INVITE_LINK_SECRET`, required in production) so every active invitation gets Copy / WhatsApp / email actions. Lookups still use the hash. Older invitations show "Link not available".
