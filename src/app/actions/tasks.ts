@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/session";
-import { addComment, cancelTask, completeTask, createTask, decideTransfer, reopenTask, requestTransfer, startTask, updateTask } from "@/server/services/tasks";
+import { addComment, completeTask, createTask, decideTransfer, deleteTask, reopenTask, requestTransfer, startTask, updateTask } from "@/server/services/tasks";
 import { commentSchema, taskSchema } from "@/server/validation";
 import { AppError } from "@/server/errors";
 import { getT } from "@/i18n/server";
@@ -30,19 +30,29 @@ export async function updateTaskAction(_: FormState, fd: FormData): Promise<Form
   });
 }
 
-/** Status changes from lists and the detail page: op = start | complete | cancel | reopen. */
+/** Status changes from lists and the detail page: op = start | complete | reopen. */
 export async function taskStatusAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId"), taskId = str(fd, "taskId"), op = str(fd, "op");
   return handleAction(async () => {
     if (op === "start") await startTask(user.id, groupId, taskId);
     else if (op === "complete") await completeTask(user.id, groupId, taskId);
-    else if (op === "cancel") await cancelTask(user.id, groupId, taskId);
     else if (op === "reopen") await reopenTask(user.id, groupId, taskId);
     else throw new AppError("invalid_input");
     refresh();
     const { t } = await getT();
     return { ok: true, message: t.tasks.saved };
+  });
+}
+
+/** Permanent delete (Admins; enforced in the service). */
+export async function deleteTaskAction(_: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const groupId = str(fd, "groupId");
+  return handleAction(async () => {
+    await deleteTask(user.id, groupId, str(fd, "taskId"));
+    refresh();
+    redirect(`/groups/${groupId}/tasks?notice=task_deleted`);
   });
 }
 

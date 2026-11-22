@@ -286,6 +286,13 @@ export const tasks = sqliteTable(
   ],
 );
 
+/** Keys of automatic tasks an Admin deleted, so the generator does not create them again. */
+export const dismissedAutoTasks = sqliteTable(
+  "dismissed_auto_tasks",
+  { groupId: groupRef(), sourceKey: text("source_key").notNull() },
+  (t) => [primaryKey({ columns: [t.groupId, t.sourceKey] })],
+);
+
 export const taskAssignees = sqliteTable(
   "task_assignees",
   {
@@ -473,6 +480,7 @@ export const reminderRules = sqliteTable(
     sourceType: text("source_type", { enum: REMINDER_SOURCES }).notNull(),
     sourceId: text("source_id").notNull(), // polymorphic; the sweep ignores rules whose source is gone
     leadMinutes: integer("lead_minutes").notNull(),
+    remindAt: text("remind_at"), // tasks only: custom local date-time; overrides leadMinutes when set
     recipientMode: text("recipient_mode", { enum: RECIPIENT_MODES }).notNull(),
     updatedById: userRef("updated_by_id"),
     updatedAt: updatedAt(),

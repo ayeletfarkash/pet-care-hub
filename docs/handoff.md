@@ -5,7 +5,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 ## Current state
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 87 Vitest + 26 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-21.
+- Tests: 90 Vitest + 27 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-22.
 - Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -24,6 +24,15 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-22: Tasks and completion interactions (branch `feature/phase2-ui-improvements`)
+- Cancel removed from UI/actions/service; the done view lists completed only. The `cancelled` status stays in the enum so old rows still render (reachable by URL/search).
+- Permanent delete (Admins, server-enforced) via trash icon + ConfirmDialog (`triggerIcon` prop), on the list and detail page. `deleteTask` removes dependents explicitly in one `writeTx` (assignees, comments, history, transfer requests, reminder rule + recipients, notifications; no reliance on FK cascades). Deleting a recurring task's open instance ends the series; earlier instances stay.
+- Decision: a deleted automatic task is recorded in `dismissed_auto_tasks (group_id, source_key)` so the generator doesn't recreate it in the same cycle (migration 0008).
+- Completion is a checkbox (`forms/task-checkbox.tsx`): check = complete, uncheck = reopen; history rows kept. The inbox's "Mark as completed" button is unchanged.
+- Custom reminders: `reminder_rules.remind_at` (tasks only; overrides lead time; must be in the future). Add Task form has a Reminder choice (presets + custom); the task page's reminder card offers the same. Sweep fires it once (`occurrenceKey = custom:<time>`), also for undated tasks; preferences still apply. `ReminderAvailability` warns when push is unsupported/blocked or task reminders are off.
+- Lesson: React resets a form after an action; a `<select>` goes back to its mount-time default even when controlled. Remount it with the echoed value (`key`) — see `reminder-fields.tsx`. The TaskForm recurrence select likely has the same latent issue.
+- Dev DB needs `npm run db:migrate` (0008).
+- Agents used: security-reviewer (no Critical/High/Medium; Low fixed: custom reminder capped at 1 year; Low accepted: deleted auto-task stays dismissed for that cycle key, group-scoped).
 ### 2026-11-21: Profile, invitations and form improvements (branch `feature/phase2-ui-improvements`)
 - Decision (user): invitation tokens are now also stored AES-256-GCM encrypted (`invitations.token_enc`, migration 0007, key from `INVITE_LINK_SECRET`, required in production) so every active invitation gets Copy / WhatsApp / email actions. Lookups still use the hash. Older invitations show "Link not available".
 - Invite UI: one compact form (role, expiry, reusable). The email-invite form is gone; the server's email-bound invite path and console mailer remain for a future email provider.

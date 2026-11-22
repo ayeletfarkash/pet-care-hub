@@ -103,9 +103,9 @@ export function TextareaField(props: Base & { rows?: number }) {
   );
 }
 
-export function SelectField(props: Base & { options: { value: string; label: string; lang?: string }[] }) {
+export function SelectField(props: Base & { options: { value: string; label: string; lang?: string }[]; onChange?: (value: string) => void }) {
   const fid = props.id ?? props.name;
-  const { name, hint, error, required, defaultValue, options } = props;
+  const { name, hint, error, required, defaultValue, options, onChange } = props;
   return (
     <FieldShell {...props}>
       <select
@@ -115,6 +115,7 @@ export function SelectField(props: Base & { options: { value: string; label: str
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(fid, hint, error)}
         defaultValue={defaultValue ?? undefined}
+        onChange={onChange && ((e) => onChange(e.target.value))}
         className={inputCls}
       >
         {options.map((o) => (

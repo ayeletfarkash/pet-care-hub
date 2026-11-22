@@ -1,13 +1,14 @@
 import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
-import { taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
+import { dismissedAutoTasks, notifications, reminderRuleRecipients, reminderRules, taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { nextOccurrence, nowLocal, type LocalDate } from "../schedule";
 import type { TaskInput } from "../validation";
 
 // PRD §10. Both roles: view, create (incl. initial assignees), start, complete, comment, request transfer.
-// Admins only: edit title/due/priority/recurrence/assignees, cancel, approve/reject transfers.
+// Admins only: edit title/due/priority/recurrence/assignees, delete, approve/reject transfers.
+// "cancelled" is no longer set (Phase 5 UI change); legacy cancelled rows stay readable.
 
 export type TaskRow = typeof tasks.$inferSelect;
 const OPEN = ["new", "in_progress"] as const;
@@ -36,7 +37,7 @@ export async function listTasks(userId: string, groupId: string, view: "open" | 
   const role = await requireMembership(db, userId, groupId);
   const rows = await db.select().from(tasks).where(and(
     eq(tasks.groupId, groupId),
-    view === "open" ? inArray(tasks.status, [...OPEN]) : inArray(tasks.status, ["completed", "cancelled"]),
+    view === "open" ? inArray(tasks.status, [...OPEN]) : eq(tasks.status, "completed"),
   )).orderBy(view === "open" ? asc(tasks.dueAt) : desc(tasks.updatedAt)).limit(view === "open" ? 500 : 100);
   const a = await assigneesOf(db, rows.map((t) => t.id));
   const pending = rows.length
@@ -72,9 +73,11 @@ export async function createTask(userId: string, groupId: string, input: TaskInp
   return writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, input.assignees);
-    const { assignees, ...fields } = input;
+    const { assignees, reminder, ...fields } = input;
     const [t] = await tx.insert(tasks).values({ ...fields, groupId, seriesId: crypto.randomUUID(), createdById: userId }).returning({ id: tasks.id });
     for (const u of assignees) await tx.insert(taskAssignees).values({ taskId: t.id, userId: u, groupId });
+    // Same as the task page's reminder card with its default recipients (any member may set task reminders).
+    if (reminder) await tx.insert(reminderRules).values({ groupId, sourceType: "task", sourceId: t.id, ...reminder, recipientMode: "responsible", updatedById: userId, updatedAt: new Date() });
     await history(tx, groupId, t.id, userId, "created");
     return t.id;
   });
@@ -86,7 +89,7 @@ export async function updateTask(userId: string, groupId: string, taskId: string
     await requireMembersOf(tx, groupId, input.assignees);
     const t = await loadTask(tx, groupId, taskId);
     if (!isOpen(t)) throw new AppError("task_closed");
-    const { assignees, ...fields } = input;
+    const { assignees, reminder: _reminder, ...fields } = input;
     try {
       await tx.update(tasks).set({ ...fields, updatedAt: new Date() }).where(eq(tasks.id, taskId));
     } catch (e) {
@@ -146,16 +149,24 @@ export async function reopenTask(userId: string, groupId: string, taskId: string
   });
 }
 
-/** Cancel (Admins). Cancelling a recurring task ends the series: no next instance is created. */
-export async function cancelTask(userId: string, groupId: string, taskId: string) {
+/**
+ * Permanent delete (Admins). Dependents are removed explicitly in the same transaction: assignees,
+ * comments, history, transfer requests, its reminder rule and its notifications (polymorphic, no FK).
+ * Other instances of a recurring series stay; deleting the open instance ends the series.
+ * A deleted automatic task is remembered so the generator doesn't create it again.
+ */
+export async function deleteTask(userId: string, groupId: string, taskId: string) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId, "admin");
     const t = await loadTask(tx, groupId, taskId);
-    if (!isOpen(t)) throw new AppError("task_closed");
-    await tx.update(tasks).set({ status: "cancelled", updatedAt: new Date() }).where(eq(tasks.id, taskId));
-    await tx.update(taskTransferRequests).set({ status: "rejected", decidedById: userId, decidedAt: new Date() })
-      .where(and(eq(taskTransferRequests.taskId, taskId), eq(taskTransferRequests.status, "pending")));
-    await history(tx, groupId, taskId, userId, "cancelled");
+    const rules = await tx.select({ id: reminderRules.id }).from(reminderRules)
+      .where(and(eq(reminderRules.groupId, groupId), eq(reminderRules.sourceType, "task"), eq(reminderRules.sourceId, taskId)));
+    if (rules.length) await tx.delete(reminderRuleRecipients).where(inArray(reminderRuleRecipients.ruleId, rules.map((r) => r.id)));
+    await tx.delete(reminderRules).where(and(eq(reminderRules.groupId, groupId), eq(reminderRules.sourceType, "task"), eq(reminderRules.sourceId, taskId)));
+    await tx.delete(notifications).where(and(eq(notifications.groupId, groupId), eq(notifications.sourceType, "task"), eq(notifications.sourceId, taskId)));
+    for (const child of [taskAssignees, taskComments, taskHistory, taskTransferRequests]) await tx.delete(child).where(eq(child.taskId, taskId));
+    if (t.sourceKey) await tx.insert(dismissedAutoTasks).values({ groupId, sourceKey: t.sourceKey }).onConflictDoNothing();
+    await tx.delete(tasks).where(eq(tasks.id, taskId));
   });
 }
 

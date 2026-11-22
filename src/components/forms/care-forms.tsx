@@ -8,6 +8,7 @@ import { CheckboxField, SelectField, TextareaField, TextField } from "../ui/fiel
 import { Button, SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { useForm } from "./use-form";
+import { ReminderAvailability, ReminderChoice } from "./reminder-fields";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 type Member = { userId: string; name: string };
@@ -169,10 +170,11 @@ export function EventForm({ t, action, hidden, initial, members, submitLabel, to
 }
 
 // ─────────── Tasks ───────────
-export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
+export function TaskForm({ t, action, hidden, initial, members, submitLabel, reminder }: {
   t: Dict; action: Action; hidden: Record<string, string>; initial?: Record<string, unknown>; members: Member[]; submitLabel: string;
+  reminder?: { prefsOff: boolean }; // Add Task only: choose the reminder up front
 }) {
-  const { state, formAction, ref, f, list, e, v } = useForm(action, initial ?? { priority: "normal", recurrence: "none", recurrenceInterval: 1 });
+  const { state, formAction, ref, f, list, e, v } = useForm(action, initial ?? { priority: "normal", recurrence: "none", recurrenceInterval: 1, reminder: "0" });
   const [rec, setRec] = useState(String(v.recurrence ?? "none") as (typeof TASK_RECURRENCES)[number]);
   const k = t.tasks, req = t.common.required;
   return (
@@ -185,7 +187,7 @@ export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
         <TextareaField {...f("description")} label={k.description} />
         <div className="grid gap-x-4 sm:grid-cols-2">
           <TextField {...f("dueDate")} type="date" label={k.dueDate} />
-          <TextField {...f("dueTime")} type="time" label={k.dueTime} hint={k.dueTimeHint} />
+          <TextField {...f("dueTime")} type="time" label={k.dueTime} />
           <SelectField {...f("priority")} label={k.priority} options={TASK_PRIORITIES.map((x) => ({ value: x, label: k.priorities[x] }))} />
         </div>
         <div className="grid gap-x-4 sm:grid-cols-2"
@@ -195,6 +197,13 @@ export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
             <TextField {...f("recurrenceInterval")} type="number" min="1" max="365" inputMode="numeric" label={k.interval[rec]} hint={k.intervalHint} />
           )}
         </div>
+        {reminder && (
+          <>
+            <ReminderAvailability t={t} prefsOff={reminder.prefsOff} />
+            <ReminderChoice t={t} name="reminder" id="task-reminder" label={k.reminder} defaultValue={String(v.reminder ?? "0")} remindAt={v.remindAt as string | undefined}
+              allowCustom errors={{ lead: e.reminder, remindAt: e.remindAt }} />
+          </>
+        )}
         {members.length > 0 && (
           <CheckboxGroup name="assignees" idPrefix="assignees" legendText={k.assignees} checked={list("assignees")} error={e.assignees}
             options={members.map((m) => ({ value: m.userId, label: m.name }))} />

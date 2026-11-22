@@ -74,9 +74,19 @@ test.describe("Phase 2 daily care", () => {
     await care.goto("/");
     await care.getByRole("link", { name: "Buy dog food" }).click();
     await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0);
-    await care.getByRole("button", { name: "Mark completed" }).click();
+    const done = care.getByRole("checkbox", { name: "Mark completed" });
+    await done.check();
     await ok(care, "Task updated.");
     await expect(care.getByText("Completed", { exact: true }).first()).toBeVisible();
+    await done.uncheck(); // clicking again reopens it
+    await expect(care.locator("li", { hasText: /^Reopened/ })).toBeVisible();
+    await expect(done).not.toBeChecked();
+    await expect(care.getByRole("button", { name: /^Delete task/ })).toHaveCount(0); // caregivers can't delete
+    await care.goto(`/groups/${groupId}/tasks`);
+    await care.getByRole("checkbox", { name: "Mark completed: Buy dog food" }).check();
+    await ok(care, "Task updated.");
+    await care.goto(`/groups/${groupId}/tasks?view=done`);
+    await expect(care.getByRole("checkbox", { name: "Mark completed: Buy dog food" })).toBeChecked();
 
     await care.goto(`/groups/${groupId}/events/new`);
     await care.getByLabel(/^Type/).selectOption("vet");
@@ -87,6 +97,36 @@ test.describe("Phase 2 daily care", () => {
     await care.goto(`/groups/${groupId}/calendar`);
     await care.getByRole("button", { name: /^Mark completed: Annual checkup/ }).click();
     await ok(care, "Status updated.");
+  });
+
+  test("tasks: custom reminder time on create; admin deletes permanently after confirming", async ({ browser }) => {
+    const { admin, groupId } = await team(browser);
+    await admin.goto(`/groups/${groupId}/tasks/new`);
+    await expect(admin.getByText("Without a time the task is due")).toHaveCount(0); // hint removed
+    await admin.getByLabel(/^Task/).fill("Vet call");
+    await admin.getByLabel("Reminder", { exact: true }).selectOption("custom");
+    await admin.getByLabel("Reminder date and time").fill(`${yesterday()}T09:00`);
+    await admin.getByRole("button", { name: "Save" }).click();
+    await expect(admin.getByText("Choose a time in the future.")).toBeVisible();
+    const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "Asia/Jerusalem" });
+    await admin.getByLabel("Reminder date and time").fill(`${tomorrow}T09:00`);
+    await admin.getByRole("button", { name: "Save" }).click();
+    await expect(admin.getByRole("heading", { level: 1, name: "Vet call" })).toBeVisible();
+    await expect(admin.getByLabel("When to remind")).toHaveValue("custom");
+    await expect(admin.getByLabel("Reminder date and time")).toHaveValue(`${tomorrow}T09:00`);
+    await expectNoA11yViolations(admin);
+
+    await admin.goto(`/groups/${groupId}/tasks`);
+    await admin.getByRole("button", { name: "Delete task: Vet call" }).click();
+    const dialog = admin.getByRole("dialog", { name: "Permanently delete Vet call?" });
+    await expect(dialog).toContainText("can't be undone");
+    await expectNoA11yViolations(admin);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(admin.getByRole("link", { name: "Vet call" })).toBeVisible();
+    await admin.getByRole("button", { name: "Delete task: Vet call" }).click();
+    await dialog.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(admin.getByText("Task deleted.")).toBeVisible();
+    await expect(admin.getByRole("link", { name: "Vet call" })).toHaveCount(0);
   });
 
   test("automated WCAG checks on Phase 2 pages (incl. RTL)", async ({ browser }) => {

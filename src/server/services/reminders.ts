@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import { db, writeCount, writeTx } from "../db";
 import {
   groups, memberships, notificationPreferences, notifications, pets, reminderRuleRecipients, reminderRules,
@@ -47,6 +47,8 @@ export async function sweep(now = new Date()): Promise<number> {
     ? await db.select().from(reminderRuleRecipients).where(inArray(reminderRuleRecipients.ruleId, rules.map((r) => r.id)))
     : [];
   const ruleOf = new Map(rules.map((r) => [`${r.sourceType}|${r.sourceId}`, { ...r, users: picked.filter((p) => p.ruleId === r.id).map((p) => p.userId) }]));
+  // Tasks with a custom reminder time in this window (may be days before the due time, or undated).
+  const customIds = rules.filter((r) => r.sourceType === "task" && r.remindAt && r.remindAt > from && r.remindAt <= to).map((r) => r.sourceId);
 
   // Occurrences up to a day ahead (the longest lead time), still open.
   const dFrom = from.slice(0, 10), dTo = addDays(to.slice(0, 10), 1);
@@ -56,7 +58,7 @@ export async function sweep(now = new Date()): Promise<number> {
     activitiesForGroups(ids, dFrom, dTo),
     db.select().from(tasks).where(and(
       inArray(tasks.groupId, ids), inArray(tasks.status, ["new", "in_progress"]),
-      isNotNull(tasks.dueAt), gte(tasks.dueAt, from), lte(tasks.dueAt, `${dTo}T23:59`),
+      or(and(isNotNull(tasks.dueAt), gte(tasks.dueAt, from), lte(tasks.dueAt, `${dTo}T23:59`)), customIds.length ? inArray(tasks.id, customIds) : undefined),
     )),
   ]);
   const assignees = due.length
@@ -66,7 +68,7 @@ export async function sweep(now = new Date()): Promise<number> {
     ...doses.filter((d) => d.status !== "given").map((d) => ({ groupId: d.groupId, sourceType: "medication" as const, sourceId: d.planId, at: d.scheduledFor, responsible: [d.responsibleUserId], name: d.name })),
     ...occ.filter((o) => o.status === "scheduled").map((o) => ({ groupId: o.groupId, sourceType: "event" as const, sourceId: o.eventId, at: o.allDay ? `${o.at.slice(0, 10)}T${ALL_DAY_TIME}` : o.at, responsible: [o.assigneeId], name: o.title })),
     ...acts.filter((a) => a.status !== "completed" && a.status !== "missed").map((a) => ({ groupId: a.groupId, sourceType: "routine" as const, sourceId: a.routineId, at: a.scheduledFor, responsible: [a.responsibleUserId], name: a.name })),
-    ...due.map((x) => ({ groupId: x.groupId, sourceType: "task" as const, sourceId: x.id, at: x.dueAt!, responsible: assignees.filter((a) => a.taskId === x.id).map((a) => a.userId), name: x.title })),
+    ...due.map((x) => ({ groupId: x.groupId, sourceType: "task" as const, sourceId: x.id, at: x.dueAt ?? "", responsible: assignees.filter((a) => a.taskId === x.id).map((a) => a.userId), name: x.title })),
   ];
 
   const rows: Row[] = [];
@@ -77,7 +79,9 @@ export async function sweep(now = new Date()): Promise<number> {
 
   for (const c of candidates) {
     const rule = ruleOf.get(`${c.sourceType}|${c.sourceId}`);
-    const fireAt = addMinutesLocal(c.at, -(rule?.leadMinutes ?? DEFAULT_LEAD[c.sourceType]));
+    const custom = c.sourceType === "task" ? rule?.remindAt : null;
+    if (!custom && !c.at) continue; // undated task without a custom time
+    const fireAt = custom ?? addMinutesLocal(c.at, -(rule?.leadMinutes ?? DEFAULT_LEAD[c.sourceType]));
     if (fireAt <= from || fireAt > to) continue;
     const current = membersOf.get(c.groupId) ?? [];
     const responsible = c.responsible.filter((u): u is string => !!u);
@@ -85,7 +89,8 @@ export async function sweep(now = new Date()): Promise<number> {
       : rule?.recipientMode === "selected" ? rule.users
       : responsible.length ? responsible : current; // nobody responsible → remind everyone rather than no one
     push(c.groupId, wanted.filter((u) => current.includes(u)), {
-      sourceType: c.sourceType, sourceId: c.sourceId, occurrenceKey: c.at, deliverAt: fireAt, params: { name: c.name, pet: pet.get(c.groupId) ?? "", at: c.at },
+      sourceType: c.sourceType, sourceId: c.sourceId, occurrenceKey: custom ? `custom:${custom}` : c.at, deliverAt: fireAt,
+      params: { name: c.name, pet: pet.get(c.groupId) ?? "", ...(c.at ? { at: c.at } : {}) },
     });
   }
 

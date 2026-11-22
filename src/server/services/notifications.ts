@@ -54,6 +54,7 @@ export async function getReminderRule(userId: string, groupId: string, type: Rem
   return {
     canEdit: RULE_ROLE[type] !== "admin" || role === "admin",
     leadMinutes: rule?.leadMinutes ?? DEFAULT_LEAD[type],
+    remindAt: rule?.remindAt ?? null,
     recipientMode: rule?.recipientMode ?? "responsible",
     recipients,
   };
@@ -64,11 +65,12 @@ export async function setReminderRule(userId: string, groupId: string, type: Rem
     await requireMembership(tx, userId, groupId, RULE_ROLE[type]);
     await requireSource(tx, groupId, type, sourceId);
     await requireMembersOf(tx, groupId, input.recipients);
+    if (input.remindAt && type !== "task") throw new AppError("invalid_input"); // the sweep only handles custom times for tasks
     const [rule] = await tx.insert(reminderRules)
-      .values({ groupId, sourceType: type, sourceId, leadMinutes: input.leadMinutes, recipientMode: input.recipientMode, updatedById: userId, updatedAt: new Date() })
+      .values({ groupId, sourceType: type, sourceId, leadMinutes: input.leadMinutes, remindAt: input.remindAt, recipientMode: input.recipientMode, updatedById: userId, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: [reminderRules.sourceType, reminderRules.sourceId],
-        set: { leadMinutes: input.leadMinutes, recipientMode: input.recipientMode, updatedById: userId, updatedAt: new Date() },
+        set: { leadMinutes: input.leadMinutes, remindAt: input.remindAt, recipientMode: input.recipientMode, updatedById: userId, updatedAt: new Date() },
       })
       .returning({ id: reminderRules.id });
     await tx.delete(reminderRuleRecipients).where(eq(reminderRuleRecipients.ruleId, rule.id));

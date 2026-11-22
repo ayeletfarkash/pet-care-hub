@@ -10,7 +10,7 @@ import { removeMember } from "./members";
 import { addAttachments, createMedicalRecord, deleteMedicalRecord, getMedicalRecord, listMedicalRecords, readAttachment, updateMedicalRecord } from "./medical";
 import { createPlan, deletePlan, endPlan, getPlan, groupDoses, recordAdministration } from "./medications";
 import { createEvent, deleteEvent, groupOccurrences, setOccurrenceStatus, updateEvent } from "./events";
-import { cancelTask, completeTask, createTask, decideTransfer, getTask, listTasks, reopenTask, requestTransfer, updateTask } from "./tasks";
+import { completeTask, createTask, decideTransfer, deleteTask, getTask, listTasks, reopenTask, requestTransfer, updateTask } from "./tasks";
 
 const code = async (p: Promise<unknown>) => {
   try { await p; return "ok"; } catch (e) { return (e as { code?: string }).code ?? String(e); }
@@ -161,18 +161,20 @@ describe("events", () => {
 describe("tasks", () => {
   const task = (o = {}) => taskSchema.parse({ title: "Buy food", ...o });
 
-  it("both roles create and complete; only admins edit or cancel; assignees must be members", async () => {
+  it("both roles create and complete; only admins edit or delete; assignees must be members", async () => {
     const s = await setup();
     expect(await code(createTask(s.care, s.g, task({ assignees: [s.out] })))).toBe("invalid_assignee");
     const id = await createTask(s.care, s.g, task({ assignees: [s.care] }));
     expect(await code(updateTask(s.care, s.g, id, task({ title: "X" })))).toBe("forbidden");
-    expect(await code(cancelTask(s.care, s.g, id))).toBe("forbidden");
+    expect(await code(deleteTask(s.care, s.g, id))).toBe("forbidden");
     expect(await code(completeTask(s.out, s.gOut, id))).toBe("not_found");
     await completeTask(s.care, s.g, id);
     expect(await code(completeTask(s.admin, s.g, id))).toBe("task_closed");
     expect((await getTask(s.admin, s.g, id)).history.map((h) => h.action)).toEqual(["completed", "created"]);
     await reopenTask(s.care, s.g, id); // undo a mistaken completion
     expect((await getTask(s.admin, s.g, id)).task.status).toBe("new");
+    expect((await listTasks(s.admin, s.g, "done")).tasks).toHaveLength(0); // reopened → back in open tasks
+    expect((await listTasks(s.admin, s.g, "open")).tasks.map((x) => x.id)).toEqual([id]);
   });
 
   it("recurring tasks need a due date and spawn the next instance once, even when completed concurrently", async () => {
@@ -184,8 +186,9 @@ describe("tasks", () => {
     const open = (await listTasks(s.admin, s.g)).tasks;
     expect(open).toHaveLength(1);
     expect(open[0]).toMatchObject({ dueAt: `${today()}T07:00`, overdue: true, assignees: [{ userId: s.care }] });
-    await cancelTask(s.admin, s.g, open[0].id); // cancelling ends the series
+    await deleteTask(s.admin, s.g, open[0].id); // deleting the open instance ends the series
     expect((await listTasks(s.admin, s.g)).tasks).toHaveLength(0);
+    expect((await listTasks(s.admin, s.g, "done")).tasks).toHaveLength(1); // earlier completed instance stays
   });
 
   it("custom intervals: an every-3-days task comes back 3 days after its due date", async () => {
