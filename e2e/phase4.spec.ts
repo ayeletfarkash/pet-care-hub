@@ -44,7 +44,7 @@ test.describe("Phase 4 notifications", () => {
     await expectNoA11yViolations(page);
 
     await item.getByRole("button", { name: "Mark task as completed: Refill water" }).click();
-    await ok(page, "Task updated");
+    await ok(page, "Task completed");
     await expect(item.getByRole("button", { name: /Mark task as completed/ })).toHaveCount(0);
     // Snooze: a new reminder later; the task's own state is untouched
     await item.getByText("Snooze", { exact: true }).and(item.locator("summary")).click();

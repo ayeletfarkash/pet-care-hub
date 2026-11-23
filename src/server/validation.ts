@@ -281,10 +281,10 @@ const reminderChoice = {
   leadMinutes: z.string().trim().refine((v) => v === "custom" || (REMINDER_LEADS as readonly number[]).includes(Number(v)), "required"),
   remindAt: z.string().trim().optional(),
 };
-const checkRemindAt = (v: { leadMinutes: string; remindAt?: string }, ctx: z.RefinementCtx) => {
+const checkRemindAt = (v: { leadMinutes: string; remindAt?: string }, ctx: z.RefinementCtx, allowPast = false) => {
   if (v.leadMinutes !== "custom") return;
   if (!localDateTime.safeParse(v.remindAt ?? "").success) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "invalid_date" });
-  else if (v.remindAt! <= nowLocal()) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "past_reminder" });
+  else if (!allowPast && v.remindAt! <= nowLocal()) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "past_reminder" });
   else if (v.remindAt! > `${addDays(todayLocal(), 366)}T23:59`) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "invalid_date" }); // security review: no never-firing far-future rows
 };
 const toReminder = (v: { leadMinutes: string; remindAt?: string }) =>
@@ -295,7 +295,7 @@ export const reminderRuleSchema = z.object({
   recipientMode: z.enum(RECIPIENT_MODES),
   recipients: z.array(z.string().trim().min(1)).max(100).default([]),
 }).refine((v) => v.recipientMode !== "selected" || v.recipients.length > 0, { message: "recipients_required", path: ["recipients"] })
-  .superRefine(checkRemindAt)
+  .superRefine((v, ctx) => checkRemindAt(v, ctx, true)) // setReminderRule refuses a past time unless it is the saved one
   .transform((v) => ({ ...v, ...toReminder(v), recipients: v.recipientMode === "selected" ? [...new Set(v.recipients)] : [] }));
 export type ReminderRuleInput = z.infer<typeof reminderRuleSchema>;
 

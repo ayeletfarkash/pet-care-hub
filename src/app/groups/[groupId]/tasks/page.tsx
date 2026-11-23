@@ -38,7 +38,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
         <ul className="space-y-2">
           {tasks.map((x) => (
             <li key={x.id} className="card flex items-center gap-3 rounded-xl border-2 border-divider bg-surface p-3">
-              <TaskCheckbox key={x.status} groupId={groupId} taskId={x.id} completed={x.status === "completed"} label={fmt(k.completeLabel, { title: x.title })} />
+              <TaskCheckbox groupId={groupId} taskId={x.id} completed={x.status === "completed"} label={fmt(k.completeLabel, { title: x.title })} />
               <div className="min-w-0 flex-1">
                 <p className="font-bold"><Link href={`/groups/${groupId}/tasks/${x.id}`}>{x.title}</Link></p>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
@@ -52,7 +52,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
               {role === "admin" && (
                 <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} triggerAriaLabel={fmt(k.deleteLabel, { title: x.title })}
                   cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
-                  <ActionForm action={deleteTaskAction} fields={{ groupId, taskId: x.id }} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
+                  <ActionForm action={deleteTaskAction} fields={{ groupId, taskId: x.id, stay: "1" }} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
                 </ConfirmDialog>
               )}
             </li>

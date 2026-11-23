@@ -8,7 +8,7 @@ import { CheckboxField, SelectField, TextareaField, TextField } from "../ui/fiel
 import { Button, SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { useForm } from "./use-form";
-import { ReminderAvailability, ReminderChoice } from "./reminder-fields";
+import { ReminderChoice } from "./reminder-fields";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 type Member = { userId: string; name: string };
@@ -198,11 +198,8 @@ export function TaskForm({ t, action, hidden, initial, members, submitLabel, rem
           )}
         </div>
         {reminder && (
-          <>
-            <ReminderAvailability t={t} prefsOff={reminder.prefsOff} />
-            <ReminderChoice t={t} name="reminder" id="task-reminder" label={k.reminder} defaultValue={String(v.reminder ?? "0")} remindAt={v.remindAt as string | undefined}
+            <ReminderChoice t={t} prefsOff={reminder.prefsOff} name="reminder" id="task-reminder" label={k.reminder} defaultValue={String(v.reminder ?? "0")} remindAt={v.remindAt as string | undefined}
               allowCustom errors={{ lead: e.reminder, remindAt: e.remindAt }} />
-          </>
         )}
         {members.length > 0 && (
           <CheckboxGroup name="assignees" idPrefix="assignees" legendText={k.assignees} checked={list("assignees")} error={e.assignees}

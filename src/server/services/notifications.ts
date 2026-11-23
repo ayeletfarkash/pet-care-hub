@@ -66,6 +66,12 @@ export async function setReminderRule(userId: string, groupId: string, type: Rem
     await requireSource(tx, groupId, type, sourceId);
     await requireMembersOf(tx, groupId, input.recipients);
     if (input.remindAt && type !== "task") throw new AppError("invalid_input"); // the sweep only handles custom times for tasks
+    if (input.remindAt && input.remindAt <= nowLocal()) {
+      // Keeping a time that already fired is fine (e.g. changing recipients); setting a new past one is not.
+      const saved = await tx.select({ remindAt: reminderRules.remindAt }).from(reminderRules)
+        .where(and(eq(reminderRules.sourceType, type), eq(reminderRules.sourceId, sourceId))).get();
+      if (saved?.remindAt !== input.remindAt) throw new AppError("past_reminder");
+    }
     const [rule] = await tx.insert(reminderRules)
       .values({ groupId, sourceType: type, sourceId, leadMinutes: input.leadMinutes, remindAt: input.remindAt, recipientMode: input.recipientMode, updatedById: userId, updatedAt: new Date() })
       .onConflictDoUpdate({

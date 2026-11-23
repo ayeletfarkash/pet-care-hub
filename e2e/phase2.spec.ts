@@ -62,8 +62,14 @@ test.describe("Phase 2 daily care", () => {
     await admin.getByRole("button", { name: "Save" }).click();
     await expect(admin.getByRole("heading", { level: 1, name: "Buy dog food" })).toBeVisible();
 
-    // Custom repeat interval chosen by the user
+    // Custom repeat interval chosen by the user; selects survive a failed submit (missing title)
     await admin.goto(`/groups/${groupId}/tasks/new`);
+    await admin.getByLabel(/^Repeats/).selectOption("weekly");
+    await admin.getByLabel("Priority").selectOption("high");
+    await admin.getByRole("button", { name: "Save" }).click();
+    await expect(admin.getByRole("alert").filter({ hasText: /./ }).first()).toBeVisible();
+    await expect(admin.getByLabel(/^Repeats/)).toHaveValue("weekly");
+    await expect(admin.getByLabel("Priority")).toHaveValue("high");
     await admin.getByLabel(/^Task/).fill("Clean litter box");
     await admin.getByLabel("Due date").fill(today());
     await admin.getByLabel(/^Repeats/).selectOption("daily");
@@ -75,16 +81,22 @@ test.describe("Phase 2 daily care", () => {
     await care.getByRole("link", { name: "Buy dog food" }).click();
     await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0);
     const done = care.getByRole("checkbox", { name: "Mark completed" });
-    await done.check();
-    await ok(care, "Task updated.");
+    await done.focus();
+    await care.keyboard.press("Enter"); // must not submit anything
+    await expect(care.getByRole("main").getByRole("alert")).toHaveCount(0);
+    await care.keyboard.press("Space");
+    await ok(care, "Task completed.");
+    await expect(care.locator("li", { hasText: /^Completed/ })).toBeVisible();
+    await care.waitForTimeout(400); // past the delayed focus fallback
+    await expect(done).toBeFocused(); // still there, so focus stays: Space again undoes it
     await expect(care.getByText("Completed", { exact: true }).first()).toBeVisible();
-    await done.uncheck(); // clicking again reopens it
+    await care.keyboard.press("Space"); // again reopens it
     await expect(care.locator("li", { hasText: /^Reopened/ })).toBeVisible();
     await expect(done).not.toBeChecked();
     await expect(care.getByRole("button", { name: /^Delete task/ })).toHaveCount(0); // caregivers can't delete
     await care.goto(`/groups/${groupId}/tasks`);
     await care.getByRole("checkbox", { name: "Mark completed: Buy dog food" }).check();
-    await ok(care, "Task updated.");
+    await ok(care, "Task completed.");
     await care.goto(`/groups/${groupId}/tasks?view=done`);
     await expect(care.getByRole("checkbox", { name: "Mark completed: Buy dog food" })).toBeChecked();
 
@@ -101,8 +113,10 @@ test.describe("Phase 2 daily care", () => {
 
   test("tasks: custom reminder time on create; admin deletes permanently after confirming", async ({ browser }) => {
     const { admin, groupId } = await team(browser);
+    await admin.addInitScript(() => { Reflect.deleteProperty(window, "PushManager"); }); // a browser without push
     await admin.goto(`/groups/${groupId}/tasks/new`);
     await expect(admin.getByText("Without a time the task is due")).toHaveCount(0); // hint removed
+    await expect(admin.getByLabel("Reminder", { exact: true })).toHaveAccessibleDescription(/This browser doesn't support notifications/);
     await admin.getByLabel(/^Task/).fill("Vet call");
     await admin.getByLabel("Reminder", { exact: true }).selectOption("custom");
     await admin.getByLabel("Reminder date and time").fill(`${yesterday()}T09:00`);
@@ -116,7 +130,14 @@ test.describe("Phase 2 daily care", () => {
     await expect(admin.getByLabel("Reminder date and time")).toHaveValue(`${tomorrow}T09:00`);
     await expectNoA11yViolations(admin);
 
+    // Narrow phone, largest content: nothing overflows
+    await admin.goto(`/groups/${groupId}/tasks/new`);
+    await admin.getByLabel(/^Task/).fill("Another task with a fairly long descriptive title");
+    await admin.getByRole("button", { name: "Save" }).click();
+    await expect(admin.getByRole("heading", { level: 1, name: /^Another task/ })).toBeVisible();
+    await admin.setViewportSize({ width: 320, height: 700 });
     await admin.goto(`/groups/${groupId}/tasks`);
+    expect(await admin.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await admin.getByRole("button", { name: "Delete task: Vet call" }).click();
     const dialog = admin.getByRole("dialog", { name: "Permanently delete Vet call?" });
     await expect(dialog).toContainText("can't be undone");
@@ -125,8 +146,15 @@ test.describe("Phase 2 daily care", () => {
     await expect(admin.getByRole("link", { name: "Vet call" })).toBeVisible();
     await admin.getByRole("button", { name: "Delete task: Vet call" }).click();
     await dialog.getByRole("button", { name: "Delete permanently" }).click();
-    await expect(admin.getByText("Task deleted.")).toBeVisible();
+    await ok(admin, "Task deleted.");
     await expect(admin.getByRole("link", { name: "Vet call" })).toHaveCount(0);
+    await expect(admin.getByRole("link", { name: /^Another task/ })).toBeFocused(); // focus moves to the neighbouring row
+    await admin.getByRole("link", { name: /^Another task/ }).click();
+    await expect(admin.getByRole("heading", { level: 1, name: /^Another task/ })).toBeVisible();
+    await admin.getByRole("button", { name: "Delete task", exact: true }).click(); // not the list's "Delete task: …"
+    await admin.getByRole("dialog").getByRole("button", { name: "Delete permanently" }).click();
+    await expect(admin).toHaveURL(/\/tasks\?notice=task_deleted/);
+    await expect(admin.getByRole("main").getByText("Task deleted.")).toBeVisible();
   });
 
   test("automated WCAG checks on Phase 2 pages (incl. RTL)", async ({ browser }) => {

@@ -108,7 +108,9 @@ export function SelectField(props: Base & { options: { value: string; label: str
   const { name, hint, error, required, defaultValue, options, onChange } = props;
   return (
     <FieldShell {...props}>
+      {/* key: React resets forms after an action and a select falls back to its mount-time default, so remount it with the echoed value. */}
       <select
+        key={String(defaultValue ?? "")}
         id={fid}
         name={name}
         required={required}

@@ -41,17 +41,18 @@ export async function taskStatusAction(_: FormState, fd: FormData): Promise<Form
     else throw new AppError("invalid_input");
     refresh();
     const { t } = await getT();
-    return { ok: true, message: t.tasks.saved };
+    return { ok: true, message: op === "complete" ? t.tasks.completedMessage : op === "reopen" ? t.tasks.reopenedMessage : t.tasks.saved };
   });
 }
 
-/** Permanent delete (Admins; enforced in the service). */
+/** Permanent delete (Admins; enforced in the service). From the list (`stay`) the row just goes; the task page itself has to redirect. */
 export async function deleteTaskAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");
   return handleAction(async () => {
     await deleteTask(user.id, groupId, str(fd, "taskId"));
     refresh();
+    if (str(fd, "stay")) return { ok: true, message: (await getT()).t.tasks.deleted };
     redirect(`/groups/${groupId}/tasks?notice=task_deleted`);
   });
 }

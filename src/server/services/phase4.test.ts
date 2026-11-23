@@ -236,7 +236,6 @@ describe("custom reminder time and task deletion (tasks UI update)", () => {
     expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: at(-5).s }).success).toBe(false); // past
     expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: "" }).success).toBe(false);
     expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: "9999-01-01T09:00" }).success).toBe(false); // > 1 year
-    expect(reminderRuleSchema.safeParse({ leadMinutes: "custom", remindAt: at(-1).s, recipientMode: "all" }).success).toBe(false);
     const id = await createTask(s.admin, s.g, task(3 * 1440, { assignees: [s.care], reminder: "custom", remindAt: at(10).s }));
     expect(await getReminderRule(s.care, s.g, "task", id)).toMatchObject({ remindAt: at(10).s, recipientMode: "responsible" });
     await sweep();
@@ -255,6 +254,33 @@ describe("custom reminder time and task deletion (tasks UI update)", () => {
     await sweep(later);
     expect(await mine(s.care, undated)).toHaveLength(1);
     expect(await mine(s.admin, undated)).toHaveLength(0);
+  });
+
+  it("a fired custom time may stay while recipients change, but a new past time is refused", async () => {
+    const s = await setup();
+    const id = await createTask(s.admin, s.g, task(1440, { reminder: "custom", remindAt: at(10).s }));
+    await db.update(reminderRules).set({ remindAt: at(-30).s }).where(eq(reminderRules.sourceId, id)); // time passes
+    const past = (min: number) => ({ leadMinutes: "custom", remindAt: at(min).s, recipientMode: "all" });
+    expect(reminderRuleSchema.safeParse(past(-30)).success).toBe(true); // the service compares with the saved time
+    expect(await code(setReminderRule(s.admin, s.g, "task", id, rule(past(-30))))).toBe("ok");
+    expect((await getReminderRule(s.admin, s.g, "task", id)).recipientMode).toBe("all");
+    expect(await code(setReminderRule(s.admin, s.g, "task", id, rule(past(-20))))).toBe("past_reminder");
+  });
+
+  it("a repeating task's next instance keeps the reminder and its recipients; a custom time moves with the due date", async () => {
+    const s = await setup();
+    const daily = { recurrence: "daily", recurrenceInterval: "2" };
+    const nextOf = async (id: string) => {
+      const [{ seriesId }] = await db.select().from(tasks).where(eq(tasks.id, id));
+      await completeTask(s.care, s.g, id);
+      return (await db.select().from(tasks).where(eq(tasks.seriesId, seriesId))).find((x) => x.id !== id)!.id;
+    };
+    const preset = await createTask(s.admin, s.g, task(60, daily));
+    await setReminderRule(s.admin, s.g, "task", preset, rule({ leadMinutes: "15", recipientMode: "selected", recipients: [s.care] }));
+    expect(await getReminderRule(s.admin, s.g, "task", await nextOf(preset))).toMatchObject({ leadMinutes: 15, remindAt: null, recipientMode: "selected", recipients: [s.care] });
+    const custom = await createTask(s.admin, s.g, task(60, { ...daily, reminder: "custom", remindAt: at(20).s }));
+    const { remindAt } = await getReminderRule(s.admin, s.g, "task", custom);
+    expect((await getReminderRule(s.admin, s.g, "task", await nextOf(custom))).remindAt).toBe(addMinutesLocal(remindAt!, 2 * 1440));
   });
 
   it("admins delete permanently; dependents go with it; others' groups untouched", async () => {

@@ -23,6 +23,7 @@ export type ErrorCode =
   | "invalid_reference" // linked item/plan/order is not in this group
   | "invalid_occurrence_log" // not a scheduled activity, or too far back/ahead
   | "routine_has_history"
+  | "past_reminder" // custom reminder time already passed
   | "invalid_snooze"; // in the past or more than 30 days ahead
 
 export class AppError extends Error {

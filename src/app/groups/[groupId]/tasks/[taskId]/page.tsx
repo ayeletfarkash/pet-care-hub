@@ -59,7 +59,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
 
       {(open || x.status === "completed") && (
         <div className="mb-8 flex flex-wrap items-center gap-4">
-          <TaskCheckbox key={x.status} groupId={groupId} taskId={taskId} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
+          <TaskCheckbox groupId={groupId} taskId={taskId} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
           {x.status === "new" && <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "start" }} label={k.start} pendingLabel={t.common.saving} />}
         </div>
       )}

@@ -9,7 +9,7 @@ import { Button, SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { CheckboxGroup } from "./care-forms";
 import { useForm } from "./use-form";
-import { ReminderAvailability, ReminderChoice } from "./reminder-fields";
+import { ReminderChoice } from "./reminder-fields";
 
 /** Personal notification categories (PRD §12.1). */
 export function NotificationPrefsForm({ t, enabled }: { t: Dict; enabled: string[] }) {
@@ -42,8 +42,7 @@ export function ReminderRuleForm({ t, hidden, initial, members, prefsOff }: {
     <form ref={ref} action={formAction} noValidate onChange={onChange}>
       <FormStatus state={state} formRef={ref} />
       {Object.entries(hidden).map(([n, v]) => <input key={n} type="hidden" name={n} value={v} />)}
-      <ReminderAvailability t={t} prefsOff={prefsOff} />
-      <ReminderChoice t={t} name="leadMinutes" id="rule-lead" label={k.lead} defaultValue={String(v.leadMinutes)} remindAt={v.remindAt as string | null}
+      <ReminderChoice t={t} prefsOff={prefsOff} name="leadMinutes" id="rule-lead" label={k.lead} defaultValue={String(v.leadMinutes)} remindAt={v.remindAt as string | null}
         allowCustom={hidden.sourceType === "task"} errors={{ lead: e.leadMinutes, remindAt: e.remindAt }} />
       <SelectField {...f("recipientMode")} id="rule-mode" label={k.who} hint={k.hint} options={RECIPIENT_MODES.map((m) => ({ value: m, label: k.modes[m] }))} />
       {mode === "selected" && <CheckboxGroup name="recipients" idPrefix="rule-recipients" legendText={k.recipients} checked={list("recipients")} error={state.fieldErrors?.recipients}
@@ -65,7 +64,7 @@ export function SnoozeForm({ t, id, label }: { t: Dict; id: string; label: strin
         onChange={(e) => { const el = e.target as unknown as HTMLSelectElement; if (el.name === "option") setOption(el.value); }}>
         <div className="w-full"><FormStatus state={state} formRef={ref} /></div>
         <input type="hidden" name="id" value={id} />
-        <SelectField id={`snooze-${id}`} name="option" label={k.snoozeFor} defaultValue={option} className="min-w-48"
+        <SelectField id={`snooze-${id}`} name="option" label={k.snoozeFor} defaultValue={f("option").defaultValue || "15"} className="min-w-48"
           options={(["15", "60", "tomorrow", "custom"] as const).map((v) => ({ value: v, label: k.snoozeOptions[v] }))} />
         {option === "custom" && <TextField {...f("customAt")} id={`snooze-at-${id}`} type="datetime-local" label={k.snoozeAt} hint={k.snoozeAtHint} className="min-w-48" />}
         <SubmitButton variant="secondary" pendingLabel={t.common.saving} className="mb-4" aria-label={`${k.snooze}: ${label}`}>{k.snooze}</SubmitButton>

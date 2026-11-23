@@ -3,12 +3,12 @@ import { db, writeTx, type Tx } from "../db";
 import { dismissedAutoTasks, notifications, reminderRuleRecipients, reminderRules, taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
-import { nextOccurrence, nowLocal, type LocalDate } from "../schedule";
+import { addMinutesLocal, nextOccurrence, nowLocal, type LocalDate } from "../schedule";
 import type { TaskInput } from "../validation";
 
 // PRD §10. Both roles: view, create (incl. initial assignees), start, complete, comment, request transfer.
 // Admins only: edit title/due/priority/recurrence/assignees, delete, approve/reject transfers.
-// "cancelled" is no longer set (Phase 5 UI change); legacy cancelled rows stay readable.
+// "cancelled" is no longer set (Phase 3 UI improvements); legacy cancelled rows stay readable.
 
 export type TaskRow = typeof tasks.$inferSelect;
 const OPEN = ["new", "in_progress"] as const;
@@ -112,6 +112,18 @@ export async function startTask(userId: string, groupId: string, taskId: string)
   });
 }
 
+/** The next instance keeps the reminder and recipients; a custom time moves by as much as the due date did. */
+async function copyReminder(tx: Tx, groupId: string, fromId: string, toId: string, shiftMinutes: number) {
+  const rule = await tx.select().from(reminderRules).where(and(eq(reminderRules.sourceType, "task"), eq(reminderRules.sourceId, fromId))).get();
+  if (!rule) return;
+  const [copy] = await tx.insert(reminderRules).values({
+    groupId, sourceType: "task", sourceId: toId, leadMinutes: rule.leadMinutes, remindAt: rule.remindAt && addMinutesLocal(rule.remindAt, shiftMinutes),
+    recipientMode: rule.recipientMode, updatedById: rule.updatedById, updatedAt: new Date(),
+  }).returning({ id: reminderRules.id });
+  const users = await tx.select({ userId: reminderRuleRecipients.userId }).from(reminderRuleRecipients).where(eq(reminderRuleRecipients.ruleId, rule.id));
+  if (users.length) await tx.insert(reminderRuleRecipients).values(users.map((u) => ({ ruleId: copy.id, userId: u.userId, groupId })));
+}
+
 /** Complete (both roles). A recurring task spawns its next instance from the due date, at most once. */
 export async function completeTask(userId: string, groupId: string, taskId: string) {
   await writeTx(async (tx) => {
@@ -121,14 +133,16 @@ export async function completeTask(userId: string, groupId: string, taskId: stri
     await tx.update(tasks).set({ status: "completed", completedAt: new Date(), completedById: userId, updatedAt: new Date() }).where(eq(tasks.id, taskId));
     await history(tx, groupId, taskId, userId, "completed");
     if (t.recurrence !== "none" && t.dueAt) {
+      const dueAt = nextOccurrence(t.dueAt, t.recurrence, t.recurrenceInterval);
       const [next] = await tx.insert(tasks).values({
         groupId, seriesId: t.seriesId, title: t.title, description: t.description, priority: t.priority,
         recurrence: t.recurrence, recurrenceInterval: t.recurrenceInterval,
-        dueAt: nextOccurrence(t.dueAt, t.recurrence, t.recurrenceInterval), createdById: t.createdById,
+        dueAt, createdById: t.createdById,
       }).onConflictDoNothing({ target: [tasks.seriesId, tasks.dueAt] }).returning({ id: tasks.id });
       if (next) {
         const a = await tx.select({ userId: taskAssignees.userId }).from(taskAssignees).where(eq(taskAssignees.taskId, taskId));
         for (const x of a) await tx.insert(taskAssignees).values({ taskId: next.id, userId: x.userId, groupId });
+        await copyReminder(tx, groupId, taskId, next.id, (Date.parse(`${dueAt}Z`) - Date.parse(`${t.dueAt}Z`)) / 60_000);
         await history(tx, groupId, next.id, userId, "created", { recurringFrom: taskId });
       }
     }
