@@ -10,7 +10,7 @@ import { Badge, taskTone } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
-import { TaskCheckbox } from "@/components/forms/task-checkbox";
+import { CompletionCheckbox } from "@/components/forms/completion-checkbox";
 import { TrashIcon } from "@/components/ui/icons";
 import { CommentForm, TransferForm } from "@/components/forms/care-forms";
 import { commentAction, decideTransferAction, deleteTaskAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
@@ -59,7 +59,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
 
       {(open || x.status === "completed") && (
         <div className="mb-8 flex flex-wrap items-center gap-4">
-          <TaskCheckbox groupId={groupId} taskId={taskId} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
+          <CompletionCheckbox action={taskStatusAction} on={{ ...hidden, op: "complete" }} off={{ ...hidden, op: "reopen" }} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
           {x.status === "new" && <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "start" }} label={k.start} pendingLabel={t.common.saving} />}
         </div>
       )}

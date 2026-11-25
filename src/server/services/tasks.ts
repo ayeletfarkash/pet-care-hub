@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import { dismissedAutoTasks, notifications, reminderRuleRecipients, reminderRules, taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
 import { AppError, isUniqueViolation } from "../errors";
@@ -243,7 +243,7 @@ export async function decideTransfer(userId: string, groupId: string, taskId: st
 }
 
 /** Open tasks in the given groups (dashboard). Caller must already have checked membership. */
-export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?: string; dueBefore?: LocalDate } = {}) {
+export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?: string } = {}) {
   if (groupIds.length === 0) return [];
   let ids: string[] | undefined;
   if (opts.assignedTo) {
@@ -255,8 +255,20 @@ export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?
     inArray(tasks.groupId, groupIds),
     inArray(tasks.status, [...OPEN]),
     ids ? inArray(tasks.id, ids) : undefined,
-    opts.dueBefore ? and(isNotNull(tasks.dueAt), lte(tasks.dueAt, `${opts.dueBefore}T23:59`)) : undefined,
   )).orderBy(asc(tasks.dueAt)).limit(200);
+  const now = nowLocal();
+  return rows.map((t) => ({ ...t, overdue: isOverdue(t, now) }));
+}
+
+/** Open and completed tasks due in [from, to], for the calendar (completed ones stay visible so they can be reopened). */
+export async function groupTasksDue(userId: string, groupId: string, from: LocalDate, to: LocalDate) {
+  await requireMembership(db, userId, groupId);
+  const rows = await db.select().from(tasks).where(and(
+    eq(tasks.groupId, groupId),
+    inArray(tasks.status, [...OPEN, "completed"]),
+    gte(tasks.dueAt, `${from}T00:00`),
+    lte(tasks.dueAt, `${to}T23:59`),
+  )).orderBy(asc(tasks.dueAt));
   const now = nowLocal();
   return rows.map((t) => ({ ...t, overdue: isOverdue(t, now) }));
 }

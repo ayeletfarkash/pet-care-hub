@@ -15,7 +15,7 @@ export function focusTargetFor(form: HTMLElement): () => HTMLElement | null {
   const sibling = li?.nextElementSibling ?? li?.previousElementSibling ?? null;
   const heading = form.closest("section")?.querySelector<HTMLElement>("h1, h2, h3") ?? document.querySelector<HTMLElement>("main h1");
   return () => {
-    const inSibling = sibling?.isConnected ? sibling.querySelector<HTMLElement>("a[href], button") : null;
+    const inSibling = sibling?.isConnected ? sibling.querySelector<HTMLElement>("a[href], button") ?? sibling.querySelector<HTMLElement>("input[type=checkbox]") : null;
     if (inSibling) return inSibling;
     if (heading?.isConnected) { heading.tabIndex = -1; return heading; }
     return null;

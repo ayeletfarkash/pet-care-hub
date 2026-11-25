@@ -85,11 +85,15 @@ test.describe("Phase 3 inventory and routines", () => {
     await care.goto(`/groups/${groupId}/routines/new`);
     await expect(care.getByRole("heading", { name: "Page not found" })).toBeVisible();
     await care.goto("/"); // assigned activity on the dashboard
-    await care.getByRole("button", { name: /^Mark as done: Morning walk/ }).click();
+    await care.getByRole("checkbox", { name: /^Mark as done: Morning walk/ }).check();
     await ok(care, "Activity logged.");
     await care.goto(`/groups/${groupId}/routines`);
     await care.getByRole("button", { name: /^Report missed: Morning walk/ }).click(); // yesterday's
     await ok(care, "Missed activity recorded.");
+    const walk = care.getByRole("region", { name: /^Today/ }).getByRole("checkbox", { name: /^Mark as done: Morning walk/ });
+    await walk.press("Space"); // logged activities are locked: unchecking must not delete the log
+    await ok(care, "This activity is already recorded.");
+    await expect(walk).toBeChecked();
     await care.getByRole("link", { name: "Morning walk" }).click();
     await care.getByRole("button", { name: "Log activity" }).click(); // extra walk
     await ok(care, "Activity logged.");

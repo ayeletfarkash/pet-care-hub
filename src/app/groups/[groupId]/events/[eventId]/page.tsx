@@ -6,10 +6,11 @@ import { fmt, formatDate, formatLocalDateTime } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { BackLink } from "@/components/back-link";
 import { Notice } from "@/components/notice";
-import { Badge } from "@/components/care";
+import { Badge, rowBodyClass, rowClass } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
+import { CompletionCheckbox, NoCheckbox } from "@/components/forms/completion-checkbox";
 import { deleteEventAction, occurrenceStatusAction } from "@/app/actions/events";
 import { loadGroup } from "../../load";
 import { ReminderSection } from "@/components/reminder-section";
@@ -55,18 +56,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               const fields = { groupId, eventId, occurrence: at };
               const label = { title: e.title, date: when(at) };
               return (
-                <li key={at} className="card flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-divider bg-surface p-3">
-                  <span className="font-semibold">{when(at)} {s && <Badge tone={s === "completed" ? "success" : "danger"}>{ev.statusLabel[s]}</Badge>}</span>
-                  <div className="flex flex-wrap gap-2">
-                    {!s ? (
-                      <>
-                        <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "completed" }} label={ev.complete} ariaLabel={fmt(ev.completeLabel, label)} pendingLabel={t.common.saving} />
-                        <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "cancelled" }} label={ev.cancel} ariaLabel={fmt(ev.cancelLabel, label)} pendingLabel={t.common.saving} variant="ghost" />
-                      </>
-                    ) : (
-                      <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "" }} label={ev.reopen} ariaLabel={fmt(ev.reopenLabel, label)} pendingLabel={t.common.saving} variant="ghost" />
-                    )}
-                  </div>
+                <li key={at} className={rowClass}>
+                  {s === "cancelled" ? <NoCheckbox /> : (
+                    <CompletionCheckbox action={occurrenceStatusAction} on={{ ...fields, status: "completed" }} off={{ ...fields, status: "" }}
+                      completed={s === "completed"} label={fmt(ev.completeLabel, label)} />
+                  )}
+                  <span className={`${rowBodyClass} font-semibold`}>{when(at)} {s && <Badge tone={s === "completed" ? "success" : "danger"}>{ev.statusLabel[s]}</Badge>}</span>
+                  {!s && <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "cancelled" }} label={ev.cancel} ariaLabel={fmt(ev.cancelLabel, label)} pendingLabel={t.common.saving} variant="ghost" />}
+                  {s === "cancelled" && <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "" }} label={ev.reopen} ariaLabel={fmt(ev.reopenLabel, label)} pendingLabel={t.common.saving} variant="ghost" />}
                 </li>
               );
             })}

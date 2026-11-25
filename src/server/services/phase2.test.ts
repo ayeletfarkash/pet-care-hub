@@ -10,7 +10,7 @@ import { removeMember } from "./members";
 import { addAttachments, createMedicalRecord, deleteMedicalRecord, getMedicalRecord, listMedicalRecords, readAttachment, updateMedicalRecord } from "./medical";
 import { createPlan, deletePlan, endPlan, getPlan, groupDoses, recordAdministration } from "./medications";
 import { createEvent, deleteEvent, groupOccurrences, setOccurrenceStatus, updateEvent } from "./events";
-import { completeTask, createTask, decideTransfer, deleteTask, getTask, listTasks, reopenTask, requestTransfer, updateTask } from "./tasks";
+import { completeTask, createTask, decideTransfer, deleteTask, getTask, groupTasksDue, listTasks, reopenTask, requestTransfer, updateTask } from "./tasks";
 
 const code = async (p: Promise<unknown>) => {
   try { await p; return "ok"; } catch (e) { return (e as { code?: string }).code ?? String(e); }
@@ -160,6 +160,21 @@ describe("events", () => {
 
 describe("tasks", () => {
   const task = (o = {}) => taskSchema.parse({ title: "Buy food", ...o });
+
+  it("the calendar lists open and completed tasks due in the range, for members only", async () => {
+    const s = await setup();
+    const due = (title: string, dueDate: string) => createTask(s.admin, s.g, task({ title, dueDate }));
+    const done = await due("Done", "2026-11-10");
+    await due("First", "2026-11-01");
+    await due("Last", "2026-11-30");
+    await due("Outside", "2026-12-01");
+    await completeTask(s.care, s.g, done);
+    const list = await groupTasksDue(s.care, s.g, "2026-11-01", "2026-11-30");
+    expect(list.map((x) => [x.title, x.status])).toEqual([["First", "new"], ["Done", "completed"], ["Last", "new"]]);
+    expect(list[1].overdue).toBe(false);
+    expect(await code(groupTasksDue(s.out, s.g, "2026-11-01", "2026-11-30"))).toBe("not_found");
+    expect(await groupTasksDue(s.out, s.gOut, "2026-11-01", "2026-11-30")).toEqual([]);
+  });
 
   it("both roles create and complete; only admins edit or delete; assignees must be members", async () => {
     const s = await setup();

@@ -41,8 +41,14 @@ test.describe("Phase 2 daily care", () => {
     // Caregiver: no plan management, but can confirm the scheduled dose
     await care.goto(`/groups/${groupId}/medications`);
     await expect(care.getByRole("link", { name: "Add medication plan" })).toHaveCount(0);
-    await care.getByRole("button", { name: /^Mark as given: Apoquel/ }).first().click();
+    const dose = care.getByRole("checkbox", { name: /^Mark as given: Apoquel/ }).first();
+    await dose.check();
     await ok(care, "Dose recorded.");
+    await care.reload();
+    await expect(dose).toHaveAccessibleDescription(/already recorded/);
+    await dose.press("Space"); // a recorded dose is locked: unchecking must not delete the record
+    await ok(care, "This dose is already recorded.");
+    await expect(dose).toBeChecked();
     await care.goto("/"); // dashboard shows today's dose for the responsible caregiver
     await expect(care.getByRole("region", { name: "My medications today" }).or(care.getByLabel("My medications today"))).toContainText("Apoquel");
 
@@ -107,8 +113,60 @@ test.describe("Phase 2 daily care", () => {
     await care.getByRole("button", { name: "Save" }).click();
     await expect(care.getByRole("heading", { level: 1, name: "Annual checkup" })).toBeVisible();
     await care.goto(`/groups/${groupId}/calendar`);
-    await care.getByRole("button", { name: /^Mark completed: Annual checkup/ }).click();
+    await expect(care.getByRole("navigation", { name: "Calendar display" }).getByRole("link", { name: "List" })).toHaveAttribute("aria-current", "page"); // the default
+    const event = care.getByRole("checkbox", { name: /^Mark completed: Annual checkup/ });
+    await event.check();
     await ok(care, "Status updated.");
+    const row = care.locator("li", { hasText: "Annual checkup" });
+    await expect(row.getByText("Completed")).toBeVisible();
+    await event.uncheck();
+    await expect(row.getByText("Completed")).toHaveCount(0);
+    const task = care.getByRole("checkbox", { name: "Mark completed: Buy dog food" }); // completed above, still listed
+    await expect(task).toBeChecked();
+    await task.uncheck();
+    await ok(care, "Task reopened.");
+    await task.check();
+    await ok(care, "Task completed.");
+  });
+
+  test("calendar view: month grid, and picking a day opens it in the list", async ({ browser }) => {
+    const { admin: page, groupId } = await team(browser);
+    await page.goto(`/groups/${groupId}/events/new`);
+    await page.getByLabel(/^Type/).selectOption("grooming");
+    await page.getByLabel(/^Title/).fill("Grooming day");
+    await page.getByLabel(/^Date/).fill("2026-11-18");
+    await page.getByLabel(/^Time/).fill("10:30");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Grooming day" })).toBeVisible();
+
+    await page.goto(`/groups/${groupId}/calendar?month=2026-11`);
+    await page.getByRole("navigation", { name: "Calendar display" }).getByRole("link", { name: "Calendar" }).click();
+    const grid = page.getByRole("table", { name: "November 2026" });
+    await expect(grid).toBeVisible();
+    await expect(page.getByRole("columnheader").first()).toContainText("Sunday");
+    await expect(grid.getByRole("cell").filter({ hasText: "Grooming day" })).toHaveCount(1);
+    await expect(page.getByRole("main").getByRole("checkbox")).toHaveCount(0); // overview only; acting happens in the list
+    await page.getByRole("link", { name: "Next month" }).click();
+    await expect(page.getByRole("table", { name: "December 2026" })).toBeVisible(); // stays in calendar view
+    await page.getByRole("link", { name: "Previous month" }).click();
+
+    await page.getByRole("link", { name: /18 November, activities: 1$/ }).click();
+    await expect(page).toHaveURL(/calendar\?day=2026-11-18$/);
+    await expect(page.getByRole("heading", { level: 3, name: /18 November/ })).toBeFocused();
+    await expect(page.getByRole("checkbox", { name: /^Mark completed: Grooming day/ })).toBeVisible();
+    await page.goBack();
+    await page.getByRole("link", { name: /19 November, activities: 0$/ }).click(); // an empty day
+    await expect(page.getByRole("heading", { level: 3, name: /19 November/ })).toBeFocused();
+    await expect(page.getByText("Nothing scheduled on this day.")).toBeVisible();
+    for (const bad of ["day=2026-02-31", "day=x", "day=2026-13-01", "month=2026-99&view=calendar", "month=9999-12&view=calendar"]) {
+      await page.goto(`/groups/${groupId}/calendar?${bad}`);
+      await expect(page.getByRole("heading", { level: 1, name: "Calendar" })).toBeVisible();
+    }
+
+    await page.setViewportSize({ width: 320, height: 700 }); // reflow
+    await page.goto(`/groups/${groupId}/calendar?view=calendar&month=2026-11`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoA11yViolations(page);
   });
 
   test("tasks: custom reminder time on create; admin deletes permanently after confirming", async ({ browser }) => {
@@ -160,7 +218,7 @@ test.describe("Phase 2 daily care", () => {
   test("automated WCAG checks on Phase 2 pages (incl. RTL)", async ({ browser }) => {
     const { admin, groupId } = await team(browser);
     const base = `/groups/${groupId}`;
-    for (const p of ["/medications", "/medications/new", "/calendar", "/events/new", "/tasks", "/tasks/new"]) {
+    for (const p of ["/medications", "/medications/new", "/calendar", "/calendar?view=calendar", "/events/new", "/tasks", "/tasks/new"]) {
       await admin.goto(base + p);
       await expectNoA11yViolations(admin);
     }
@@ -169,7 +227,7 @@ test.describe("Phase 2 daily care", () => {
     await admin.goto("/profile");
     await admin.getByLabel("Preferred language").selectOption("he");
     await admin.getByRole("button", { name: "Save", exact: true }).click();
-    for (const p of ["/medications/new", "/calendar", "/tasks/new"]) {
+    for (const p of ["/medications/new", "/calendar", "/calendar?view=calendar", "/tasks/new"]) {
       await admin.goto(base + p);
       await expect(admin.locator("html")).toHaveAttribute("dir", "rtl");
       await expectNoA11yViolations(admin);

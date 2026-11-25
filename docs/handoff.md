@@ -5,7 +5,8 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 ## Current state
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 92 Vitest + 27 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-23.
+- Calendar/routine completion (UI improvements phase 4) is on `feature/phase4-calendar`, not merged.
+- Tests: 94 Vitest + 28 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-25.
 - Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
@@ -24,6 +25,15 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-25: Calendar view and completion checkboxes (branch `feature/phase4-calendar`)
+- Decisions (user): recorded doses and routine logs are locked once checked (unchecking would delete the record; Admins still correct them in the plan/routine history); the checkbox sits at the start of the row (right in Hebrew, left in English), like the task list.
+- `CompletionCheckbox` (`on` / optional `off` fields) replaces `TaskCheckbox` and the complete/given/done buttons everywhere except the inbox. No `off` = locked. Server actions, services and schema for doses, routines and events are unchanged. "Report missed" and event "Cancel"/"Undo" stay buttons.
+- Calendar: `?view=calendar` = server-rendered month table (`calendar/month-grid.tsx`, read-only); list is the default; `?day=YYYY-MM-DD` opens the list at that day, also when empty. Tasks in the calendar now come from `groupTasksDue` (open + completed). Dose checkbox names now include the date.
+- Routines are not shown in the calendar (not requested).
+- Lesson: Playwright treats `aria-disabled` as not enabled, so `click()` waits forever; use `press("Space")`.
+- Lesson: string-compared date loops never end past 9999-12-31 ("+010000-…" sorts first). Count days when the range comes from a URL.
+- The full E2E run takes 4–8 minutes; run it in the background, and do not edit specs while it runs (workers read them late).
+- Agents used: ui-ux-specialist (no Blockers; 2 Majors fixed: kind marks on grid chips, visible + described locked state; picked day no longer colour-only; truncation and the 23:59 "no time" convention accepted). security-reviewer not used: no auth/permission/data-access rule changed; the one new read starts with `requireMembership` (tested).
 ### 2026-11-23: Tasks follow-up fixes (same branch)
 - Repeating tasks: the next instance copies the reminder rule and recipients; a custom time moves by as much as the due date.
 - A custom time that already fired can stay when other reminder settings change; a new past time is refused (`past_reminder`, checked in `setReminderRule`). It fires once: reopening a task does not repeat it.
