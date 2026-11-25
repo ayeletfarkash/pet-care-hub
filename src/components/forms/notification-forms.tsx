@@ -9,8 +9,7 @@ import { Button, SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { CheckboxGroup } from "./care-forms";
 import { useForm } from "./use-form";
-
-const LEADS = ["0", "15", "60", "1440"] as const; // matches REMINDER_LEADS in validation.ts
+import { ReminderChoice } from "./reminder-fields";
 
 /** Personal notification categories (PRD §12.1). */
 export function NotificationPrefsForm({ t, enabled }: { t: Dict; enabled: string[] }) {
@@ -27,13 +26,14 @@ export function NotificationPrefsForm({ t, enabled }: { t: Dict; enabled: string
 }
 
 /** Lead time and recipients for one task/event/plan/routine (PRD §12.2). */
-export function ReminderRuleForm({ t, hidden, initial, members }: {
+export function ReminderRuleForm({ t, hidden, initial, members, prefsOff }: {
   t: Dict;
   hidden: { groupId: string; sourceType: string; sourceId: string };
-  initial: { leadMinutes: number; recipientMode: string; recipients: string[] };
+  initial: { leadMinutes: number; remindAt: string | null; recipientMode: string; recipients: string[] };
   members: { userId: string; name: string }[];
+  prefsOff: boolean;
 }) {
-  const { state, formAction, ref, f, list } = useForm(reminderRuleAction, { ...initial, leadMinutes: String(initial.leadMinutes) });
+  const { state, formAction, ref, f, list, v, e } = useForm(reminderRuleAction, { ...initial, leadMinutes: initial.remindAt ? "custom" : String(initial.leadMinutes) });
   const k = t.notifications.rule;
   const [mode, setMode] = useState(String(f("recipientMode").defaultValue));
   // change events bubble up from the recipient-mode select; members are only chosen in "selected" mode
@@ -42,7 +42,8 @@ export function ReminderRuleForm({ t, hidden, initial, members }: {
     <form ref={ref} action={formAction} noValidate onChange={onChange}>
       <FormStatus state={state} formRef={ref} />
       {Object.entries(hidden).map(([n, v]) => <input key={n} type="hidden" name={n} value={v} />)}
-      <SelectField {...f("leadMinutes")} id="rule-lead" label={k.lead} options={LEADS.map((v) => ({ value: v, label: k.leads[v] }))} />
+      <ReminderChoice t={t} prefsOff={prefsOff} name="leadMinutes" id="rule-lead" label={k.lead} defaultValue={String(v.leadMinutes)} remindAt={v.remindAt as string | null}
+        allowCustom={hidden.sourceType === "task"} errors={{ lead: e.leadMinutes, remindAt: e.remindAt }} />
       <SelectField {...f("recipientMode")} id="rule-mode" label={k.who} hint={k.hint} options={RECIPIENT_MODES.map((m) => ({ value: m, label: k.modes[m] }))} />
       {mode === "selected" && <CheckboxGroup name="recipients" idPrefix="rule-recipients" legendText={k.recipients} checked={list("recipients")} error={state.fieldErrors?.recipients}
         options={members.map((m) => ({ value: m.userId, label: m.name }))} />}
@@ -63,7 +64,7 @@ export function SnoozeForm({ t, id, label }: { t: Dict; id: string; label: strin
         onChange={(e) => { const el = e.target as unknown as HTMLSelectElement; if (el.name === "option") setOption(el.value); }}>
         <div className="w-full"><FormStatus state={state} formRef={ref} /></div>
         <input type="hidden" name="id" value={id} />
-        <SelectField id={`snooze-${id}`} name="option" label={k.snoozeFor} defaultValue={option} className="min-w-48"
+        <SelectField id={`snooze-${id}`} name="option" label={k.snoozeFor} defaultValue={f("option").defaultValue || "15"} className="min-w-48"
           options={(["15", "60", "tomorrow", "custom"] as const).map((v) => ({ value: v, label: k.snoozeOptions[v] }))} />
         {option === "custom" && <TextField {...f("customAt")} id={`snooze-at-${id}`} type="datetime-local" label={k.snoozeAt} hint={k.snoozeAtHint} className="min-w-48" />}
         <SubmitButton variant="secondary" pendingLabel={t.common.saving} className="mb-4" aria-label={`${k.snooze}: ${label}`}>{k.snooze}</SubmitButton>

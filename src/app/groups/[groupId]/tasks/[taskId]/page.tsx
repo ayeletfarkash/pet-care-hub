@@ -10,8 +10,10 @@ import { Badge, taskTone } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
+import { TaskCheckbox } from "@/components/forms/task-checkbox";
+import { TrashIcon } from "@/components/ui/icons";
 import { CommentForm, TransferForm } from "@/components/forms/care-forms";
-import { commentAction, decideTransferAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
+import { commentAction, decideTransferAction, deleteTaskAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
 import { dueText } from "../due";
 import { loadGroup } from "../../load";
 import { ReminderSection } from "@/components/reminder-section";
@@ -39,7 +41,14 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
             {x.recurrence !== "none" && <Badge>{x.recurrenceInterval > 1 ? fmt(k.everyN[x.recurrence], { n: x.recurrenceInterval }) : k.recurrences[x.recurrence]}</Badge>}
           </p>
         </div>
-        {isAdmin && open && <LinkButton variant="secondary" href={`/groups/${groupId}/tasks/${taskId}/edit`}>{t.ui.edit}</LinkButton>}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && open && <LinkButton variant="secondary" href={`/groups/${groupId}/tasks/${taskId}/edit`}>{t.ui.edit}</LinkButton>}
+          {isAdmin && (
+            <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
+              <ActionForm action={deleteTaskAction} fields={hidden} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
+            </ConfirmDialog>
+          )}
+        </div>
       </div>
 
       <dl className="card mb-4 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
@@ -48,20 +57,11 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
         {x.description && <><dt className="font-semibold text-muted">{k.description}</dt><dd className="whitespace-pre-wrap">{x.description}</dd></>}
       </dl>
 
-      {open && (
-        <div className="mb-8 flex flex-wrap gap-2">
+      {(open || x.status === "completed") && (
+        <div className="mb-8 flex flex-wrap items-center gap-4">
+          <TaskCheckbox groupId={groupId} taskId={taskId} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
           {x.status === "new" && <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "start" }} label={k.start} pendingLabel={t.common.saving} />}
-          <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "complete" }} label={k.complete} pendingLabel={t.common.saving} variant="primary" />
-          {isAdmin && (
-            <ConfirmDialog triggerLabel={k.cancelTask} cancelLabel={t.common.cancel} title={fmt(k.cancelTitle, { title: x.title })} body={k.cancelBody}>
-              <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "cancel" }} label={k.cancelTask} pendingLabel={t.common.saving} variant="danger" />
-            </ConfirmDialog>
-          )}
         </div>
-      )}
-
-      {x.status === "completed" && (
-        <div className="mb-8"><ActionForm action={taskStatusAction} fields={{ ...hidden, op: "reopen" }} label={k.reopen} pendingLabel={t.common.saving} /></div>
       )}
 
       {open && (

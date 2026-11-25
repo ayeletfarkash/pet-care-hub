@@ -139,6 +139,16 @@ describe("groups and roles", () => {
     expect(issues({ name: "A", species: "dog", birthDate: "2999-01-01" })).toContain("birthDate:future_date");
     expect(issues({ name: "A", species: "dog", weightKg: "-1" })).toContain("weightKg:invalid_number");
     expect(issues({ name: "x".repeat(81), species: "dog" })).toContain("name:too_long");
+    expect(issues({ name: "A", species: "dog", estimatedAgeMonths: "12" })).toContain("estimatedAgeMonths:invalid_number");
+    expect(issues({ name: "A", species: "dog", estimatedAgeYears: "1.5" })).toContain("estimatedAgeYears:invalid_number");
+  });
+
+  it("estimated age combines years and months", () => {
+    const age = (y: string, m: string) => petSchema.parse({ name: "A", species: "dog", estimatedAgeYears: y, estimatedAgeMonths: m }).estimatedAgeYears;
+    expect(Math.round(age!("1", "11")! * 12)).toBe(23);
+    expect(age("", "6")).toBe(0.5);
+    expect(age("3", "0")).toBe(3);
+    expect(age("", "0")).toBeNull();
   });
 
   it("soft-deleted groups are hidden and restorable by admins only", async () => {
@@ -191,6 +201,18 @@ describe("invitations", () => {
     expect(await code(acceptInvitation(b.id, t))).toBe("already_member");
     await acceptInvitation(c.id, t);
     expect((await listActiveInvitations(a.id, g))[0].useCount).toBe(2);
+  });
+
+  it("active invitations expose their link token again; a tampered copy yields none", async () => {
+    const a = await makeUser();
+    const g = await makeGroup(a.id);
+    const t = await invite(a.id, g);
+    const [inv] = await listActiveInvitations(a.id, g);
+    expect(inv.token).toBe(t);
+    const row = await db.select({ enc: invitations.tokenEnc }).from(invitations).where(eq(invitations.id, inv.id)).get();
+    expect(row?.enc).not.toContain(t); // not stored in plain text
+    await db.update(invitations).set({ tokenEnc: row!.enc!.slice(0, -2) + "AA" }).where(eq(invitations.id, inv.id));
+    expect((await listActiveInvitations(a.id, g))[0].token).toBeNull();
   });
 
   it("revoked and expired invitations cannot be used", async () => {

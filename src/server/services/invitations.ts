@@ -4,12 +4,12 @@ import { groups, invitations, memberships, pets, users } from "../db/schema";
 import { audit } from "../audit";
 import { AppError } from "../errors";
 import { requireMembership } from "../permissions";
-import { hashToken, newToken } from "../tokens";
+import { decryptToken, encryptToken, hashToken, newToken } from "../tokens";
 import type { InvitationInput } from "../validation";
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Returns the raw token once; only its hash is stored. */
+/** Returns the raw token. Lookups use its hash; an encrypted copy lets admins share the link again. */
 export async function createInvitation(actorId: string, groupId: string, input: InvitationInput) {
   const token = newToken();
   await writeTx(async (tx) => {
@@ -19,6 +19,7 @@ export async function createInvitation(actorId: string, groupId: string, input: 
       .values({
         groupId,
         tokenHash: hashToken(token),
+        tokenEnc: encryptToken(token),
         role: input.role,
         email: input.email ?? null,
         reusable: input.email ? false : input.reusable, // email invites are always single-use
@@ -37,8 +38,9 @@ export async function createInvitation(actorId: string, groupId: string, input: 
 /** Active (usable) invitations for the members page. */
 export async function listActiveInvitations(actorId: string, groupId: string) {
   await requireMembership(db, actorId, groupId, "admin");
-  return db
+  const rows = await db
     .select({
+      tokenEnc: invitations.tokenEnc,
       id: invitations.id, role: invitations.role, email: invitations.email, reusable: invitations.reusable,
       useCount: invitations.useCount, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt,
     })
@@ -52,6 +54,8 @@ export async function listActiveInvitations(actorId: string, groupId: string) {
       ),
     )
     .orderBy(desc(invitations.createdAt));
+  // token is null for invitations created before links were stored, or if the secret changed.
+  return rows.map(({ tokenEnc, ...r }) => ({ ...r, token: decryptToken(tokenEnc) }));
 }
 
 export async function revokeInvitation(actorId: string, groupId: string, invitationId: string) {

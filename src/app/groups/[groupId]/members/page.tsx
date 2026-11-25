@@ -4,7 +4,9 @@ import { listActiveInvitations } from "@/server/services/invitations";
 import { fmt, formatDate } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { ActionForm } from "@/components/forms/action-form";
-import { InviteForms } from "@/components/forms/invite-forms";
+import { InviteForm } from "@/components/forms/invite-forms";
+import { InviteShare } from "@/components/forms/invite-share";
+import { inviteLink } from "@/server/invite-link";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { changeRoleAction, removeMemberAction, revokeInviteAction } from "@/app/actions/members";
 import { loadGroup } from "../load";
@@ -22,6 +24,7 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
     listMembers(user.id, groupId),
     isAdmin ? listActiveInvitations(user.id, groupId) : Promise.resolve([]),
   ]);
+  const links = await Promise.all(invites.map((inv) => (inv.token ? inviteLink(inv.token) : null)));
   const m = t.members, i = t.invites;
   const th = "border-b-2 border-line px-3 py-2 text-start font-semibold";
   const td = "border-b border-divider px-3 py-3 align-middle";
@@ -84,7 +87,7 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
         <section aria-labelledby="inv-h" className="mt-10">
           <h2 id="inv-h" className="text-2xl font-bold">{i.title}</h2>
           <p className="mb-4 text-muted">{i.intro}</p>
-          <InviteForms t={t} groupId={groupId} />
+          <InviteForm t={t} groupId={groupId} petName={pet.name} />
 
           <h3 id="active-h" className="mb-2 mt-8 text-xl font-bold">{i.active}</h3>
           {invites.length === 0 ? (
@@ -103,7 +106,7 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
                   </tr>
                 </thead>
                 <tbody>
-                  {invites.map((inv) => (
+                  {invites.map((inv, n) => (
                     <tr key={inv.id}>
                       <td className={td}>
                         {inv.email ? fmt(i.emailType, { email: inv.email }) : inv.reusable ? i.reusableType : i.oneTime}
@@ -112,9 +115,17 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
                       <td className={td}>{inv.useCount}</td>
                       <td className={td}>{formatDate(locale, inv.expiresAt)}</td>
                       <td className={td}>
+                        <div className="flex flex-wrap items-start gap-2">
+                        {links[n] ? (
+                          <InviteShare t={t} link={links[n]} petName={pet.name}
+                            context={`${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`} />
+                        ) : (
+                          <span className="self-center text-sm text-muted">{i.linkUnavailable}</span>
+                        )}
                         <ActionForm action={revokeInviteAction} fields={{ groupId, invitationId: inv.id }}
                           label={i.revoke} ariaLabel={`${i.revoke}: ${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`}
                           pendingLabel={t.common.saving} variant="danger" />
+                        </div>
                       </td>
                     </tr>
                   ))}

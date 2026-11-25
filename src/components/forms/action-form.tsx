@@ -10,7 +10,7 @@ import { announce } from "../live-region";
  * Where focus should go if this action removes its own button (e.g. completing a task removes the
  * row): the next list item, else the previous one, else the section's heading (WCAG 2.4.3).
  */
-function focusTargetFor(form: HTMLFormElement): () => HTMLElement | null {
+export function focusTargetFor(form: HTMLElement): () => HTMLElement | null {
   const li = form.closest("li");
   const sibling = li?.nextElementSibling ?? li?.previousElementSibling ?? null;
   const heading = form.closest("section")?.querySelector<HTMLElement>("h1, h2, h3") ?? document.querySelector<HTMLElement>("main h1");

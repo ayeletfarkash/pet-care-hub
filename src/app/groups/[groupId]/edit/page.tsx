@@ -22,7 +22,7 @@ export default async function EditPetPage({ params }: { params: Promise<{ groupI
     <div className="mx-auto max-w-3xl">
       <BackLink href={`/groups/${groupId}`} label={pet.name} />
       <h1 className="mb-6 text-3xl font-bold">{fmt(t.pet.editTitle, { pet: pet.name })}</h1>
-      <PhotoForm t={t} groupId={groupId} hasPhoto={!!photoFile} petName={pet.name} version={updatedAt?.getTime() ?? 0} />
+      <PhotoForm t={t} groupId={groupId} hasPhoto={!!photoFile} petName={pet.name} species={pet.species} version={updatedAt?.getTime() ?? 0} />
       <PetForm t={t} action={updatePetAction} groupId={groupId} initial={values} submitLabel={t.common.save} />
     </div>
   );

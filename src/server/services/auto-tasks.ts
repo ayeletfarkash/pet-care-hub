@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { db, writeTx } from "../db";
-import { events, memberships, orders, taskAssignees, taskHistory, tasks, users, type Locale } from "../db/schema";
+import { dismissedAutoTasks, events, memberships, orders, taskAssignees, taskHistory, tasks, users, type Locale } from "../db/schema";
 import { dictionaries, fmt } from "../../i18n";
 import { addDays, addMinutesLocal, nowLocal } from "../schedule";
 import { occurrencesForGroups } from "./events";
@@ -78,12 +78,14 @@ export async function generateAutoTasks(groupIds: string[], now = new Date()): P
     }
   }
   if (out.length === 0) return 0;
+  const dismissed = new Set((await db.select().from(dismissedAutoTasks).where(inArray(dismissedAutoTasks.groupId, groupIds))).map((d) => `${d.groupId}|${d.sourceKey}`));
   // Assignees must still be members (leaving already clears event assignees; this guards any other path).
   const members = new Set((await db.select({ g: memberships.groupId, u: memberships.userId }).from(memberships).where(inArray(memberships.groupId, groupIds))).map((m) => `${m.g}|${m.u}`));
 
   return writeTx(async (t) => {
     let created = 0;
     for (const { assignee, ...n } of out) {
+      if (dismissed.has(`${n.groupId}|${n.sourceKey}`)) continue; // an Admin deleted it
       const [row] = await t.insert(tasks).values({ ...n, seriesId: crypto.randomUUID() }).onConflictDoNothing().returning({ id: tasks.id });
       if (!row) continue; // already generated earlier
       created++;

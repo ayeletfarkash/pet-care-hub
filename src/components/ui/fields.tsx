@@ -103,18 +103,21 @@ export function TextareaField(props: Base & { rows?: number }) {
   );
 }
 
-export function SelectField(props: Base & { options: { value: string; label: string; lang?: string }[] }) {
+export function SelectField(props: Base & { options: { value: string; label: string; lang?: string }[]; onChange?: (value: string) => void }) {
   const fid = props.id ?? props.name;
-  const { name, hint, error, required, defaultValue, options } = props;
+  const { name, hint, error, required, defaultValue, options, onChange } = props;
   return (
     <FieldShell {...props}>
+      {/* key: React resets forms after an action and a select falls back to its mount-time default, so remount it with the echoed value. */}
       <select
+        key={String(defaultValue ?? "")}
         id={fid}
         name={name}
         required={required}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(fid, hint, error)}
         defaultValue={defaultValue ?? undefined}
+        onChange={onChange && ((e) => onChange(e.target.value))}
         className={inputCls}
       >
         {options.map((o) => (

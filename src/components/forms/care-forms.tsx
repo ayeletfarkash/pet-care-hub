@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { FormState } from "@/app/actions/form";
 import { EVENT_TYPES, INVENTORY_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, SCHEDULE_TYPES, TASK_PRIORITIES, TASK_RECURRENCES } from "@/server/db/schema";
 import { fmt, type Dict } from "@/i18n";
 import { CheckboxField, SelectField, TextareaField, TextField } from "../ui/fields";
-import { SubmitButton } from "../ui/buttons";
+import { Button, SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { useForm } from "./use-form";
+import { ReminderChoice } from "./reminder-fields";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 type Member = { userId: string; name: string };
@@ -64,7 +65,7 @@ export function PlanForm({ t, action, hidden, initial, members, submitLabel, tod
         <TextareaField {...f("instructions")} label={m.instructions} />
         <SelectField {...f("responsibleUserId")} label={m.responsible} options={memberOptions(t, members)} />
       </div>
-      <ScheduleFields t={t} form={form} labels={{ legend: m.schedule, times: m.times, timesHint: m.timesHint, time: m.time }} />
+      <ScheduleFields t={t} form={form} slots={3} labels={{ legend: m.schedule, times: m.times, time: m.time }} />
       <div className={card}><TextareaField {...f("notes")} label={t.ui.notes} /></div>
       <SubmitButton pendingLabel={t.common.saving}>{submitLabel}</SubmitButton>
     </form>
@@ -72,11 +73,17 @@ export function PlanForm({ t, action, hidden, initial, members, submitLabel, tod
 }
 
 /** Schedule fieldset shared by medication plans and routines (same rules, see validation.ts). */
-function ScheduleFields({ t, form, labels }: { t: Dict; form: ReturnType<typeof useForm>; labels: { legend: string; times: string; timesHint: string; time: string } }) {
+const MAX_TIMES = 6; // matches validation.ts
+
+function ScheduleFields({ t, form, labels, slots }: { t: Dict; form: ReturnType<typeof useForm>; labels: { legend: string; times: string; time: string }; slots: number }) {
   const { f, list, v, e } = form;
   const [type, setType] = useState(String(v.scheduleType ?? "daily"));
   const m = t.meds, req = t.common.required;
   const times = list("times");
+  // Show `slots` empty fields by default (more if already filled); "Add time" reveals one more.
+  const [count, setCount] = useState(Math.min(MAX_TIMES, Math.max(slots, times.length)));
+  const added = useRef(false);
+  useEffect(() => { if (added.current) document.getElementById(`times-${count - 1}`)?.focus(); }, [count]);
   return (
     <fieldset className={card}>
       <legend className={legend}>{labels.legend}</legend>
@@ -89,11 +96,10 @@ function ScheduleFields({ t, form, labels }: { t: Dict; form: ReturnType<typeof 
           options={t.weekdays.long.map((d, i) => ({ value: String(i), label: d }))} />
       )}
       {type === "interval" && <TextField {...f("intervalDays")} type="number" min="1" max="365" inputMode="numeric" label={m.intervalDays} required requiredLabel={req} />}
-      <fieldset className="mb-4" aria-describedby={`times-hint${e.times ? " times-error" : ""}`}>
+      <fieldset className="mb-4" aria-describedby={e.times ? "times-error" : undefined}>
         <legend className="font-semibold">{labels.times}<span className="text-danger" aria-hidden="true"> *</span><span className="sr-only"> ({req})</span></legend>
-        <p id="times-hint" className="text-sm text-muted">{labels.timesHint}</p>
         <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
+          {Array.from({ length: count }, (_, i) => (
             <div key={i}>
               <label htmlFor={`times-${i}`} className="block text-sm">{fmt(labels.time, { n: i + 1 })}</label>
               <input id={`times-${i}`} name="times" type="time" defaultValue={times[i] ?? ""} aria-invalid={e.times && i === 0 ? true : undefined}
@@ -101,11 +107,16 @@ function ScheduleFields({ t, form, labels }: { t: Dict; form: ReturnType<typeof 
             </div>
           ))}
         </div>
+        {count < MAX_TIMES && (
+          <Button variant="secondary" className="mt-3" onClick={() => { added.current = true; setCount((c) => c + 1); }}>
+            <span aria-hidden="true">+</span> {m.addTime}
+          </Button>
+        )}
         {e.times && <p id="times-error" className="mt-1 text-sm font-semibold text-danger"><span aria-hidden="true">⚠ </span>{e.times}</p>}
       </fieldset>
       <div className="grid gap-x-4 sm:grid-cols-2">
         <TextField {...f("startDate")} type="date" label={m.startDate} required requiredLabel={req} />
-        <TextField {...f("endDate")} type="date" label={m.endDate} hint={m.endDateHint} />
+        <TextField {...f("endDate")} type="date" label={m.endDate} />
       </div>
     </fieldset>
   );
@@ -159,10 +170,11 @@ export function EventForm({ t, action, hidden, initial, members, submitLabel, to
 }
 
 // ─────────── Tasks ───────────
-export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
+export function TaskForm({ t, action, hidden, initial, members, submitLabel, reminder }: {
   t: Dict; action: Action; hidden: Record<string, string>; initial?: Record<string, unknown>; members: Member[]; submitLabel: string;
+  reminder?: { prefsOff: boolean }; // Add Task only: choose the reminder up front
 }) {
-  const { state, formAction, ref, f, list, e, v } = useForm(action, initial ?? { priority: "normal", recurrence: "none", recurrenceInterval: 1 });
+  const { state, formAction, ref, f, list, e, v } = useForm(action, initial ?? { priority: "normal", recurrence: "none", recurrenceInterval: 1, reminder: "0" });
   const [rec, setRec] = useState(String(v.recurrence ?? "none") as (typeof TASK_RECURRENCES)[number]);
   const k = t.tasks, req = t.common.required;
   return (
@@ -175,7 +187,7 @@ export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
         <TextareaField {...f("description")} label={k.description} />
         <div className="grid gap-x-4 sm:grid-cols-2">
           <TextField {...f("dueDate")} type="date" label={k.dueDate} />
-          <TextField {...f("dueTime")} type="time" label={k.dueTime} hint={k.dueTimeHint} />
+          <TextField {...f("dueTime")} type="time" label={k.dueTime} />
           <SelectField {...f("priority")} label={k.priority} options={TASK_PRIORITIES.map((x) => ({ value: x, label: k.priorities[x] }))} />
         </div>
         <div className="grid gap-x-4 sm:grid-cols-2"
@@ -185,6 +197,10 @@ export function TaskForm({ t, action, hidden, initial, members, submitLabel }: {
             <TextField {...f("recurrenceInterval")} type="number" min="1" max="365" inputMode="numeric" label={k.interval[rec]} hint={k.intervalHint} />
           )}
         </div>
+        {reminder && (
+            <ReminderChoice t={t} prefsOff={reminder.prefsOff} name="reminder" id="task-reminder" label={k.reminder} defaultValue={String(v.reminder ?? "0")} remindAt={v.remindAt as string | undefined}
+              allowCustom errors={{ lead: e.reminder, remindAt: e.remindAt }} />
+        )}
         {members.length > 0 && (
           <CheckboxGroup name="assignees" idPrefix="assignees" legendText={k.assignees} checked={list("assignees")} error={e.assignees}
             options={members.map((m) => ({ value: m.userId, label: m.name }))} />
@@ -348,7 +364,7 @@ export function RoutineForm({ t, action, hidden, initial, members, submitLabel, 
         <TextareaField {...f("description")} label={r.description} />
         <SelectField {...f("responsibleUserId")} label={r.responsible} options={memberOptions(t, members)} />
       </div>
-      <ScheduleFields t={t} form={form} labels={{ legend: r.schedule, times: r.times, timesHint: r.timesHint, time: r.time }} />
+      <ScheduleFields t={t} form={form} slots={1} labels={{ legend: r.schedule, times: r.times, time: r.time }} />
       <SubmitButton pendingLabel={t.common.saving}>{submitLabel}</SubmitButton>
     </form>
   );

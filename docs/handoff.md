@@ -5,8 +5,8 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 ## Current state
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 85 Vitest + 25 Playwright (navigation spec added; medical E2E removed) (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-14.
-- Local dev DB migrated through 0006 (backups: `data/app.db.bak-pre-phase3`, `-pre-phase4`, `-pre-phase4-push`, `-pre-phase4-auto`).
+- Tests: 92 Vitest + 27 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-23.
+- Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
 ## Next steps
@@ -24,6 +24,30 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-23: Tasks follow-up fixes (same branch)
+- Repeating tasks: the next instance copies the reminder rule and recipients; a custom time moves by as much as the due date.
+- A custom time that already fired can stay when other reminder settings change; a new past time is refused (`past_reminder`, checked in `setReminderRule`). It fires once: reopening a task does not repeat it.
+- `SelectField` remounts when its default changes (`key`), because React's form reset dropped every select's choice after a failed submit, in all forms. Never pass it a `defaultValue` that follows the user's typing: it would remount and lose focus.
+- `TaskCheckbox` is no longer a form and no longer remounts, so focus stays on it. Specific "completed"/"reopened" messages. Deleting from the list stays on the list and moves focus to the next row.
+- Push/preferences notice is now the reminder select's hint (announced with the field), worded for any reminder kind; replaces `ReminderAvailability`.
+- Watch: two E2E server actions stalled >10 s (create task, register). The register one coincides with Windows entering Modern Standby; the create-task one is unexplained (machine was low on memory) and did not recur in 24 repeats. Keep the laptop awake during E2E runs; investigate if it happens again.
+- Agents used: ui-ux-specialist (no Blockers; 3 Majors fixed; `dir="ltr"` date field fixed; focus after delete fixed; rejected: aria-disabled checkbox finding (controlled, so it does not flip), wording-only notes).
+### 2026-11-22: Tasks and completion interactions (branch `feature/phase2-ui-improvements`)
+- Cancel removed from UI/actions/service; the done view lists completed only. The `cancelled` status stays in the enum so old rows still render (reachable by URL/search).
+- Permanent delete (Admins, server-enforced) via trash icon + ConfirmDialog (`triggerIcon` prop), on the list and detail page. `deleteTask` removes dependents explicitly in one `writeTx` (assignees, comments, history, transfer requests, reminder rule + recipients, notifications; no reliance on FK cascades). Deleting a recurring task's open instance ends the series; earlier instances stay.
+- Decision: a deleted automatic task is recorded in `dismissed_auto_tasks (group_id, source_key)` so the generator doesn't recreate it in the same cycle (migration 0008).
+- Completion is a checkbox (`forms/task-checkbox.tsx`): check = complete, uncheck = reopen; history rows kept. The inbox's "Mark as completed" button is unchanged.
+- Custom reminders: `reminder_rules.remind_at` (tasks only; overrides lead time; must be in the future). Add Task form has a Reminder choice (presets + custom); the task page's reminder card offers the same. Sweep fires it once (`occurrenceKey = custom:<time>`), also for undated tasks; preferences still apply. `ReminderAvailability` warns when push is unsupported/blocked or task reminders are off.
+- Lesson: React resets a form after an action; a `<select>` goes back to its mount-time default even when controlled. Remount it with the echoed value (`key`) — see `reminder-fields.tsx`. (2026-11-23: fixed for all selects.)
+- Local dev DB migrated to 0008 on 2026-11-22 (backup `data/app.db.bak-pre-tasks-delete`).
+- Agents used: security-reviewer (no Critical/High/Medium; Low fixed: custom reminder capped at 1 year; Low accepted: deleted auto-task stays dismissed for that cycle key, group-scoped).
+### 2026-11-21: Profile, invitations and form improvements (branch `feature/phase2-ui-improvements`)
+- Decision (user): invitation tokens are now also stored AES-256-GCM encrypted (`invitations.token_enc`, migration 0007, key from `INVITE_LINK_SECRET`, required in production) so every active invitation gets Copy / WhatsApp / email actions. Lookups still use the hash. Older invitations show "Link not available".
+- Invite UI: one compact form (role, expiry, reusable). The email-invite form is gone; the server's email-bound invite path and console mailer remain for a future email provider.
+- Profile: photo saves on file select (pencil = choose/replace, trash = remove; focus returns to the pencil). Estimated age = years + months (0–11), still stored as fractional years. Identifying characteristics removed from form/view and validation; the DB column and old data are kept.
+- Medication form shows 3 time fields, routines 1, with "Add time" up to 6. End-date and times hints removed.
+- Dev DB needs `npm run db:migrate` (0007) before `npm run dev`.
+- Agents used: security-reviewer (no Critical/High; Medium fixed: secret fails closed outside development/test; Lows accepted: no AAD/length checks, link sent to wa.me/mailto is a user-initiated share, token in the auth-gated dynamic admin page).
 ### 2026-11-14: Navigation and page structure (branch `feature/navigation-profile`, not committed)
 - Decisions (user): Profile section lives inside each pet (tabs "Pet profile" / "Group members"); the pet section tabs (not the header links) move to a bottom bar.
 - Design: bottom bar is `position: fixed`, rendered after the content (focus order = visual order), scrolls sideways on phones and scrolls the current item into view; `body/html:has([data-bottom-bar])` add bottom padding + scroll-padding so the footer and focused controls stay clear (WCAG 2.4.11). Profile tabs are links with `aria-current`, not an ARIA tablist (separate URLs).

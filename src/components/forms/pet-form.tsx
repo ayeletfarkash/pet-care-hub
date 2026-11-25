@@ -4,7 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import type { FormState } from "@/app/actions/form";
 import { SPECIES, SEXES } from "@/server/db/schema";
 import type { Dict } from "@/i18n";
-import { SelectField, TextareaField, TextField } from "../ui/fields";
+import { SelectField, TextField } from "../ui/fields";
 import { SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 
@@ -26,6 +26,10 @@ export function PetForm({
   const [species, setSpecies] = useState(String(v.species ?? ""));
   const p = t.pet, req = t.common.required;
   const f = (name: string) => ({ name, defaultValue: v[name] ?? "", error: e[name] });
+  // Saved age is fractional years; after a failed submit the raw years/months come back instead.
+  const savedMonths = !state.values && initial.estimatedAgeYears != null ? Math.round(Number(initial.estimatedAgeYears) * 12) : null;
+  const ageYears = savedMonths != null ? String(Math.floor(savedMonths / 12)) : String(v.estimatedAgeYears ?? "");
+  const ageMonths = savedMonths != null ? String(savedMonths % 12) : String(v.estimatedAgeMonths ?? "0");
 
   return (
     <form ref={ref} action={formAction} noValidate>
@@ -46,11 +50,17 @@ export function PetForm({
           <SelectField {...f("sex")} defaultValue={v.sex ?? "unknown"} label={p.sex}
             options={SEXES.map((s) => ({ value: s, label: t.sex[s] }))} />
           <TextField {...f("birthDate")} type="date" label={p.birthDate} hint={p.birthDateHint} className="mb-4 sm:col-span-2" />
-          <TextField {...f("estimatedAgeYears")} type="number" step="0.1" min="0" max="100" inputMode="decimal" label={p.estimatedAge} />
+          <fieldset className="mb-4 sm:col-span-2">
+            <legend className="mb-1 font-semibold">{p.estimatedAge}</legend>
+            <div className="grid grid-cols-2 gap-x-4">
+              <TextField {...f("estimatedAgeYears")} defaultValue={ageYears} type="number" step="1" min="0" max="100" inputMode="numeric" label={p.ageYearsLabel} />
+              <SelectField {...f("estimatedAgeMonths")} defaultValue={ageMonths} label={p.ageMonthsLabel}
+                options={Array.from({ length: 12 }, (_, m) => ({ value: String(m), label: String(m) }))} />
+            </div>
+          </fieldset>
           <TextField {...f("weightKg")} type="number" step="0.01" min="0" inputMode="decimal" label={p.weight} />
           <TextField {...f("color")} label={p.color} />
         </div>
-        <TextareaField {...f("identifyingMarks")} label={p.marks} />
       </fieldset>
 
       <fieldset className="card mb-6 rounded-xl border-2 border-divider bg-surface p-5">

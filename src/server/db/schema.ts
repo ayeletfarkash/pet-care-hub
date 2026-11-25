@@ -97,6 +97,7 @@ export const invitations = sqliteTable(
     id: id(),
     groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull().unique(),
+    tokenEnc: text("token_enc"), // AES-GCM encrypted token, so active links can be shared again; null for older rows
     role: text("role", { enum: ROLES }).notNull().default("caregiver"),
     email: text("email"), // set for email invitations; only that address may accept
     reusable: integer("reusable", { mode: "boolean" }).notNull().default(false),
@@ -283,6 +284,13 @@ export const tasks = sqliteTable(
     uniqueIndex("tasks_source_key_uq").on(t.groupId, t.sourceKey).where(sql`source_key IS NOT NULL`), // each automatic task once
     index("tasks_group_status_due_idx").on(t.groupId, t.status, t.dueAt),
   ],
+);
+
+/** Keys of automatic tasks an Admin deleted, so the generator does not create them again. */
+export const dismissedAutoTasks = sqliteTable(
+  "dismissed_auto_tasks",
+  { groupId: groupRef(), sourceKey: text("source_key").notNull() },
+  (t) => [primaryKey({ columns: [t.groupId, t.sourceKey] })],
 );
 
 export const taskAssignees = sqliteTable(
@@ -472,6 +480,7 @@ export const reminderRules = sqliteTable(
     sourceType: text("source_type", { enum: REMINDER_SOURCES }).notNull(),
     sourceId: text("source_id").notNull(), // polymorphic; the sweep ignores rules whose source is gone
     leadMinutes: integer("lead_minutes").notNull(),
+    remindAt: text("remind_at"), // tasks only: custom local date-time; overrides leadMinutes when set
     recipientMode: text("recipient_mode", { enum: RECIPIENT_MODES }).notNull(),
     updatedById: userRef("updated_by_id"),
     updatedAt: updatedAt(),

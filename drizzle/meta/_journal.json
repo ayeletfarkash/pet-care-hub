@@ -50,6 +50,20 @@
       "when": 1794646667235,
       "tag": "0006_phase4_auto_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795267941340,
+      "tag": "0007_invite_token_enc",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795375240713,
+      "tag": "0008_task_delete_custom_reminder",
+      "breakpoints": true
     }
   ]
 }

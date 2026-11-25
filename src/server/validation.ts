@@ -47,9 +47,10 @@ export const petSchema = z
     sex: z.enum(SEXES).catch("unknown"),
     birthDate: isoDate.refine((v) => v == null || v <= new Date().toISOString().slice(0, 10), "future_date"),
     estimatedAgeYears: optNumber(100),
+    estimatedAgeMonths: z.string().trim().optional()
+      .refine((v) => !v || /^([0-9]|1[01])$/.test(v), "invalid_number").transform((v) => (v ? Number(v) : 0)),
     weightKg: optNumber(2000),
     color: opt(80),
-    identifyingMarks: opt(500),
     vetName: opt(),
     vetClinic: opt(),
     vetPhone: opt(40),
@@ -62,7 +63,14 @@ export const petSchema = z
   .superRefine((v, ctx) => {
     if (v.species === "other" && !v.speciesOther)
       ctx.addIssue({ code: "custom", path: ["speciesOther"], message: "required" });
-  });
+    if (v.estimatedAgeYears != null && !Number.isInteger(v.estimatedAgeYears))
+      ctx.addIssue({ code: "custom", path: ["estimatedAgeYears"], message: "invalid_number" });
+  })
+  // Stored as fractional years (existing column); the form splits it back into years + months.
+  .transform(({ estimatedAgeMonths: m, ...v }) => ({
+    ...v,
+    estimatedAgeYears: v.estimatedAgeYears == null && !m ? null : (v.estimatedAgeYears ?? 0) + m / 12,
+  }));
 export type PetInput = z.infer<typeof petSchema>;
 
 export const invitationSchema = z.object({
@@ -168,12 +176,20 @@ export const taskSchema = z
     recurrenceInterval: z.string().trim().optional().transform((v) => (v ? Number(v) : 1))
       .refine((v) => Number.isInteger(v) && v >= 1 && v <= 365, "invalid_number"),
     assignees: z.array(z.string().min(1)).max(50).default([]),
+    // Add Task form only; absent on edit (reminders are then set on the task page).
+    reminder: z.string().trim().optional(),
+    remindAt: z.string().trim().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.recurrence !== "none" && !v.dueDate) ctx.addIssue({ code: "custom", path: ["dueDate"], message: "due_required" });
+    if (v.reminder) {
+      if (v.reminder !== "custom" && !(REMINDER_LEADS as readonly number[]).includes(Number(v.reminder))) ctx.addIssue({ code: "custom", path: ["reminder"], message: "required" });
+      checkRemindAt({ leadMinutes: v.reminder, remindAt: v.remindAt }, ctx);
+    }
   })
-  .transform(({ dueDate, dueTime, ...v }) => ({
+  .transform(({ dueDate, dueTime, reminder, remindAt, ...v }) => ({
     ...v,
+    reminder: reminder ? toReminder({ leadMinutes: reminder, remindAt }) : null,
     recurrenceInterval: v.recurrence === "none" ? 1 : v.recurrenceInterval,
     assignees: [...new Set(v.assignees)],
     dueAt: dueDate ? `${dueDate}T${dueTime ?? "23:59"}` : null,
@@ -260,12 +276,27 @@ export const REMINDER_LEADS = [0, 15, 60, 1440] as const; // minutes before: at 
 /** Unchecked categories are absent from the form, so the list holds the enabled ones. */
 export const notificationPrefsSchema = z.object({ categories: z.array(z.enum(NOTIFICATION_CATEGORIES)).default([]) });
 
+/** "When to remind": a preset lead time, or "custom" with a future local date-time (tasks only). */
+const reminderChoice = {
+  leadMinutes: z.string().trim().refine((v) => v === "custom" || (REMINDER_LEADS as readonly number[]).includes(Number(v)), "required"),
+  remindAt: z.string().trim().optional(),
+};
+const checkRemindAt = (v: { leadMinutes: string; remindAt?: string }, ctx: z.RefinementCtx, allowPast = false) => {
+  if (v.leadMinutes !== "custom") return;
+  if (!localDateTime.safeParse(v.remindAt ?? "").success) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "invalid_date" });
+  else if (!allowPast && v.remindAt! <= nowLocal()) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "past_reminder" });
+  else if (v.remindAt! > `${addDays(todayLocal(), 366)}T23:59`) ctx.addIssue({ code: "custom", path: ["remindAt"], message: "invalid_date" }); // security review: no never-firing far-future rows
+};
+const toReminder = (v: { leadMinutes: string; remindAt?: string }) =>
+  v.leadMinutes === "custom" ? { leadMinutes: 0, remindAt: v.remindAt! } : { leadMinutes: Number(v.leadMinutes), remindAt: null };
+
 export const reminderRuleSchema = z.object({
-  leadMinutes: z.coerce.number().refine((n) => (REMINDER_LEADS as readonly number[]).includes(n), "required"),
+  ...reminderChoice,
   recipientMode: z.enum(RECIPIENT_MODES),
   recipients: z.array(z.string().trim().min(1)).max(100).default([]),
 }).refine((v) => v.recipientMode !== "selected" || v.recipients.length > 0, { message: "recipients_required", path: ["recipients"] })
-  .transform((v) => ({ ...v, recipients: v.recipientMode === "selected" ? [...new Set(v.recipients)] : [] }));
+  .superRefine((v, ctx) => checkRemindAt(v, ctx, true)) // setReminderRule refuses a past time unless it is the saved one
+  .transform((v) => ({ ...v, ...toReminder(v), recipients: v.recipientMode === "selected" ? [...new Set(v.recipients)] : [] }));
 export type ReminderRuleInput = z.infer<typeof reminderRuleSchema>;
 
 export const SNOOZE_MAX_DAYS = 30;

@@ -22,6 +22,13 @@ function yearsSince(iso: string) {
   return Math.max(0, y);
 }
 
+/** "1 year, 11 months" from a whole number of months. */
+function formatAge(t: Dict, totalMonths: number) {
+  const y = Math.floor(totalMonths / 12), m = totalMonths % 12, p = t.pet;
+  const ys = y === 1 ? p.year1 : fmt(p.yearsN, { n: y }), ms = m === 1 ? p.month1 : fmt(p.monthsN, { n: m });
+  return y && m ? fmt(p.ageJoin, { y: ys, m: ms }) : y ? ys : ms;
+}
+
 function Details({ t, rows }: { t: Dict; rows: [string, React.ReactNode][] }) {
   return (
     <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-[minmax(8rem,auto)_1fr]">
@@ -44,8 +51,8 @@ export default async function GroupPage({
   const isAdmin = role === "admin";
   const ltr = (s: string | null) => (s ? <span className="ltr-value">{s}</span> : null);
   const age = pet.birthDate
-    ? fmt(p.ageYears, { n: yearsSince(pet.birthDate) })
-    : pet.estimatedAgeYears != null ? fmt(p.ageEstimated, { n: formatNumber(locale, pet.estimatedAgeYears) }) : null;
+    ? formatAge(t, yearsSince(pet.birthDate) * 12)
+    : pet.estimatedAgeYears != null ? fmt(p.ageEstimated, { n: formatAge(t, Math.round(pet.estimatedAgeYears * 12)) }) : null;
 
   return (
     <>
@@ -78,7 +85,6 @@ export default async function GroupPage({
             [p.age, age],
             [p.weight, pet.weightKg != null ? fmt(p.weightValue, { n: formatNumber(locale, pet.weightKg) }) : null],
             [p.color, pet.color],
-            [p.marks, pet.identifyingMarks],
           ]} />
         </section>
         <section aria-labelledby="vet-h" className="card rounded-xl border-2 border-divider bg-surface p-5">

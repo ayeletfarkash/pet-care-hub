@@ -12,7 +12,7 @@ vi.mock("web-push", () => ({
 }));
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
-import { notifications, pushSubscriptions, taskAssignees, tasks } from "../db/schema";
+import { notifications, pushSubscriptions, reminderRules, taskAssignees, taskComments, taskHistory, tasks } from "../db/schema";
 import { makeGroup, makeUser } from "../../test/factories";
 import { resetRateLimits } from "../rate-limit";
 import { addMinutesLocal, nowLocal } from "../schedule";
@@ -23,7 +23,7 @@ import { acceptInvitation, createInvitation } from "./invitations";
 import { leaveGroup, removeMember } from "./members";
 import { createPlan, recordAdministration } from "./medications";
 import { createEvent } from "./events";
-import { completeTask, createTask, getTask } from "./tasks";
+import { addComment, completeTask, createTask, deleteTask, getTask } from "./tasks";
 import { createOrder } from "./orders";
 import { setOccurrenceStatus } from "./events";
 import { changeStock, createItem } from "./inventory";
@@ -227,6 +227,85 @@ describe("web push", () => {
     const before = sent.length;
     await deliverPush();
     expect(sent.length).toBe(before); // already pushed
+  });
+});
+
+describe("custom reminder time and task deletion (tasks UI update)", () => {
+  it("custom time: set on create, fires at that time once; must be in the future; tasks only", async () => {
+    const s = await setup();
+    expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: at(-5).s }).success).toBe(false); // past
+    expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: "" }).success).toBe(false);
+    expect(taskSchema.safeParse({ title: "x", reminder: "custom", remindAt: "9999-01-01T09:00" }).success).toBe(false); // > 1 year
+    const id = await createTask(s.admin, s.g, task(3 * 1440, { assignees: [s.care], reminder: "custom", remindAt: at(10).s }));
+    expect(await getReminderRule(s.care, s.g, "task", id)).toMatchObject({ remindAt: at(10).s, recipientMode: "responsible" });
+    await sweep();
+    expect(await mine(s.care, id)).toHaveLength(0); // not yet
+    const later = new Date(Date.now() + 15 * 60_000);
+    await sweep(later);
+    await sweep(later);
+    const [n] = await mine(s.care, id);
+    expect(n).toMatchObject({ deliverAt: at(10).s, occurrenceKey: `custom:${at(10).s}` });
+    expect(await mine(s.care, id)).toHaveLength(1);
+    const ev = await createEvent(s.admin, s.g, eventSchema.parse({ type: "vet", title: "Vet", date: at(600).date, time: at(600).time }));
+    expect(await code(setReminderRule(s.admin, s.g, "event", ev, rule({ leadMinutes: "custom", remindAt: at(30).s })))).toBe("invalid_input");
+    // An undated task can have a custom reminder too; preferences still apply.
+    await setNotificationPrefs(s.admin, ["medications", "events", "inventory", "routines"]);
+    const undated = await createTask(s.care, s.g, taskSchema.parse({ title: "Call groomer", reminder: "custom", remindAt: at(10).s }));
+    await sweep(later);
+    expect(await mine(s.care, undated)).toHaveLength(1);
+    expect(await mine(s.admin, undated)).toHaveLength(0);
+  });
+
+  it("a fired custom time may stay while recipients change, but a new past time is refused", async () => {
+    const s = await setup();
+    const id = await createTask(s.admin, s.g, task(1440, { reminder: "custom", remindAt: at(10).s }));
+    await db.update(reminderRules).set({ remindAt: at(-30).s }).where(eq(reminderRules.sourceId, id)); // time passes
+    const past = (min: number) => ({ leadMinutes: "custom", remindAt: at(min).s, recipientMode: "all" });
+    expect(reminderRuleSchema.safeParse(past(-30)).success).toBe(true); // the service compares with the saved time
+    expect(await code(setReminderRule(s.admin, s.g, "task", id, rule(past(-30))))).toBe("ok");
+    expect((await getReminderRule(s.admin, s.g, "task", id)).recipientMode).toBe("all");
+    expect(await code(setReminderRule(s.admin, s.g, "task", id, rule(past(-20))))).toBe("past_reminder");
+  });
+
+  it("a repeating task's next instance keeps the reminder and its recipients; a custom time moves with the due date", async () => {
+    const s = await setup();
+    const daily = { recurrence: "daily", recurrenceInterval: "2" };
+    const nextOf = async (id: string) => {
+      const [{ seriesId }] = await db.select().from(tasks).where(eq(tasks.id, id));
+      await completeTask(s.care, s.g, id);
+      return (await db.select().from(tasks).where(eq(tasks.seriesId, seriesId))).find((x) => x.id !== id)!.id;
+    };
+    const preset = await createTask(s.admin, s.g, task(60, daily));
+    await setReminderRule(s.admin, s.g, "task", preset, rule({ leadMinutes: "15", recipientMode: "selected", recipients: [s.care] }));
+    expect(await getReminderRule(s.admin, s.g, "task", await nextOf(preset))).toMatchObject({ leadMinutes: 15, remindAt: null, recipientMode: "selected", recipients: [s.care] });
+    const custom = await createTask(s.admin, s.g, task(60, { ...daily, reminder: "custom", remindAt: at(20).s }));
+    const { remindAt } = await getReminderRule(s.admin, s.g, "task", custom);
+    expect((await getReminderRule(s.admin, s.g, "task", await nextOf(custom))).remindAt).toBe(addMinutesLocal(remindAt!, 2 * 1440));
+  });
+
+  it("admins delete permanently; dependents go with it; others' groups untouched", async () => {
+    const s = await setup();
+    const id = await createTask(s.care, s.g, task(-5, { assignees: [s.care], reminder: "15" }));
+    await addComment(s.care, s.g, id, "hi");
+    await sweep();
+    expect(await mine(s.care, id)).toHaveLength(1);
+    expect(await code(deleteTask(s.care, s.g, id))).toBe("forbidden");
+    expect(await code(deleteTask(s.out, s.gOut, id))).toBe("not_found");
+    await deleteTask(s.admin, s.g, id);
+    expect(await code(getTask(s.admin, s.g, id))).toBe("not_found");
+    expect(await mine(s.care, id)).toHaveLength(0);
+    expect(await db.select().from(reminderRules).where(eq(reminderRules.sourceId, id))).toHaveLength(0);
+    for (const child of [taskAssignees, taskComments, taskHistory]) expect(await db.select().from(child).where(eq(child.taskId, id))).toHaveLength(0);
+  });
+
+  it("a deleted automatic task is not created again", async () => {
+    const s = await setup();
+    const item = await createItem(s.admin, s.g, inventoryItemSchema.parse({ name: "Treats", type: "food", quantity: "0" }));
+    await sweep();
+    const [auto] = await db.select().from(tasks).where(eq(tasks.sourceId, item));
+    await deleteTask(s.admin, s.g, auto.id);
+    await sweep();
+    expect(await db.select().from(tasks).where(eq(tasks.sourceId, item))).toHaveLength(0);
   });
 });
 
