@@ -4,6 +4,9 @@ import { fmt, type Dict } from "@/i18n";
 export function Notice({ t, notice, reason }: { t: Dict; notice?: string; reason?: string }) {
   const messages: Record<string, string> = {
     saved: t.common.saved,
+    password_reset: t.auth.resetDone,
+    google_linked: t.auth.googleLinked,
+    sign_in_failed: t.errors[reason as keyof Dict["errors"]] ?? t.errors.generic,
     joined: t.join.joined,
     left: t.group.left,
     group_deleted: t.group.deleted,
@@ -14,7 +17,7 @@ export function Notice({ t, notice, reason }: { t: Dict; notice?: string; reason
   };
   const msg = notice ? messages[notice] : undefined;
   if (!msg) return null;
-  const isError = notice === "join_failed";
+  const isError = notice === "join_failed" || notice === "sign_in_failed";
   return (
     <div
       role={isError ? "alert" : "status"}

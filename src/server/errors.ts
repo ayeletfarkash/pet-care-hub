@@ -5,6 +5,8 @@ export type ErrorCode =
   | "invalid_credentials"
   | "email_taken"
   | "rate_limited"
+  | "reset_invalid" // unknown, expired or already used reset link
+  | "google_failed"
   | "last_member"
   | "invite_invalid" // generic: unknown, expired, revoked or used up
   | "invite_email_mismatch"

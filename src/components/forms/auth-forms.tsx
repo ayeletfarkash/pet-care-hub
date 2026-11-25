@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { loginAction, registerAction } from "@/app/actions/auth";
+import { forgotPasswordAction, loginAction, registerAction, resetPasswordAction } from "@/app/actions/auth";
 import type { FormState } from "@/app/actions/form";
 import type { Dict } from "@/i18n";
 import { SelectField, TextField } from "../ui/fields";
@@ -20,6 +20,32 @@ export function LoginForm({ t }: { t: Dict }) {
       <TextField name="password" type="password" dir="ltr" label={t.auth.password} autoComplete="current-password"
         required requiredLabel={t.common.required} error={e.password} />
       <SubmitButton pendingLabel={t.common.saving} className="w-full">{t.auth.loginButton}</SubmitButton>
+    </form>
+  );
+}
+
+export function ForgotPasswordForm({ t }: { t: Dict }) {
+  const [state, action] = useActionState(forgotPasswordAction, {} as FormState);
+  const ref = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={ref} action={action} noValidate>
+      <FormStatus state={state} formRef={ref} />
+      <TextField name="email" type="email" dir="ltr" label={t.auth.email} autoComplete="email" inputMode="email"
+        required requiredLabel={t.common.required} defaultValue={state.values?.email} error={state.fieldErrors?.email} />
+      <SubmitButton pendingLabel={t.common.saving} className="w-full">{t.auth.forgotButton}</SubmitButton>
+    </form>
+  );
+}
+
+export function ResetPasswordForm({ t }: { t: Dict }) {
+  const [state, action] = useActionState(resetPasswordAction, {} as FormState);
+  const ref = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={ref} action={action} noValidate>
+      <FormStatus state={state} formRef={ref} />
+      <TextField name="password" type="password" dir="ltr" label={t.auth.newPassword} hint={t.auth.passwordHint}
+        autoComplete="new-password" required requiredLabel={t.common.required} error={state.fieldErrors?.password} />
+      <SubmitButton pendingLabel={t.common.saving} className="w-full">{t.auth.resetButton}</SubmitButton>
     </form>
   );
 }

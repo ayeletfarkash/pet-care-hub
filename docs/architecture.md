@@ -55,6 +55,13 @@ Limitation: single server process only. Multi-instance hosting → move to Postg
 ## Invitations
 `/invite/<token>` (GET) stores the token in a 24 h httpOnly cookie and redirects to `/join` (removes the token from the URL; visiting never joins by itself). Logged-in users confirm on `/join`; new users register and are joined automatically. Consumption is a single conditional `UPDATE … WHERE usable` checked by rows-affected, in the same transaction as the membership insert.
 
+## Password reset
+`/forgot-password` always gives the same answer; the email goes out after the response (`after()`), so timing doesn't reveal accounts. Tokens: 256-bit, SHA-256 in `password_reset_tokens`, 1 hour, single use; a newer request doesn't cancel older links. `/reset-password/<token>` moves the token to an httpOnly cookie. A reset deletes all the user's sessions, reset tokens and push subscriptions. Links use `APP_URL`, never the Host header (a forged one would leak the token). Google-only users set a password the same way.
+
+## Google sign-in
+Authorization code flow with PKCE, state and nonce in a 10-minute cookie limited to `/auth/google`; no library (`auth/google.ts`). The ID token comes straight from Google over TLS, so its claims are checked but not its signature (OIDC Core §3.1.3.7). Google tokens are discarded; only `users.google_sub` is stored.
+Linking: a Google identity is found by `sub`, else by email. Our registration doesn't verify emails, so linking by email removes the old password and all sessions (someone may have registered the address first) and is allowed only when Google vouches for the mailbox (`@gmail.com` or Workspace `hd`). Otherwise: "account already exists, log in".
+
 ## Files
 Pet photos: magic-byte check (JPEG/PNG/WebP), 5 MB cap, generated filename under `UPLOAD_DIR` (outside `public/`), served by `/groups/<id>/photo` after a membership check with `nosniff` + `private, no-store`.
 
@@ -151,4 +158,4 @@ Known limit: recurring events match on their first date only for the date filter
 Future AI (PRD §13.4): a new rule only needs to return the same `Insight` shape.
 
 ## Deferred (later phases / decisions needed)
-Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Google/Apple sign-in (Apple needs a paid developer account) · real email delivery (provider not chosen; dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.
+Per-group storage quota for uploads (only a per-user upload rate limit today) · `<bdi>` isolation of mixed Hebrew/English user text · progressive "add dose time" control (6 fixed time inputs today) · Email verification (email-bound invites only prove the typed address) · removing a member does not revoke reusable links they hold (UI warns) · `TRUST_PROXY=1` needed behind a proxy for per-IP rate limits · Apple sign-in (needs a paid developer account) · a "change password" screen (reset covers it) · emailing invitations (dev logs links) · 30-day purge job and account deletion · CSP header · persistent rate limiting.

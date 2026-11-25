@@ -9,7 +9,10 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
+- Branch `feature/google-signin-password-reset` (not merged): password reset + Google sign-in. 106 Vitest + 32 Playwright passing on 2026-11-25. **Run `npm run db:migrate` (0009) before `npm run dev`**: login and sign-up fail on an unmigrated DB. Not yet tried with real Gmail or Google credentials ([setup](development.md)).
+
 ## Next steps
+0. Add `SMTP_URL` and `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` to `.env.local`, then try a real reset email and a real Google sign-in.
 1. Click through inventory/orders/routines with real data.
 2. Manual accessibility checks in [testing.md](testing.md) (NVDA, mobile, zoom/reflow, forced colors), now also for inventory/orders/routines.
 3. Try push on a real phone (needs HTTPS hosting or a tunnel; iOS needs the PWA added to the home screen).
@@ -17,13 +20,18 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 5. Phase 5 (future expansion) only after the Phase 4 acceptance criteria are confirmed in the browser.
 
 ## Open decisions (need the user)
-- Email provider for invitations (currently dev-only console log).
-- Google sign-in (needs Google OAuth credentials); Apple (needs paid developer account).
+- Apple sign-in (needs paid developer account).
 - Hosting target (SQLite single-process is fine for one instance; multi-instance → Postgres).
 - Accessibility contact email for the statement (`ACCESSIBILITY_CONTACT_EMAIL`).
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-25: Password reset and Google sign-in (branch `feature/google-signin-password-reset`)
+- Decisions (user): reset emails through Gmail SMTP (`nodemailer`, pinned to 10.4.1 because 10.6.1 was 5 days old; no dependencies). Google sign-in is written by hand (no auth library).
+- Decisions (design): linking Google to an existing account removes the old password and logs out every device, because sign-up never verifies emails; only Gmail/Workspace addresses may link. A reset also deletes push subscriptions. Emailed links use `APP_URL`, never the Host header.
+- Not done (not requested): Apple sign-in, email verification, change-password screen, sending invitations by email.
+- Lesson: logging in clears the visitor language cookie, so E2E pages are Hebrew again after logout.
+- Agents used: security-reviewer (no Critical/High; Medium accepted: reset limits are per email and, without `TRUST_PROXY=1`, global, as for login; Lows accepted: reset-cookie fixation, small timing difference, notice keys) · ui-ux-specialist (no Blockers; fixed: forgot-link target size, wording of the logout warning; rejected: alert on page load (same as /join), resend form).
 ### 2026-11-25: Roles removed (branch `feature/remove-roles`, on top of `feature/phase4-calendar`)
 - Decision (user): no roles or per-member permissions; every member of a group can do everything, including inviting/removing members and deleting the group. Group isolation (`requireMembership`) is unchanged and still the only gate.
 - Consequences: last-Admin rule → last member can't leave (`last_member`); handovers apply at once (`transferTask`; approval flow and dashboard approvals removed); no 48 h back-recording limit; any member can restore a deleted group; anyone can correct dose/routine records in the history (checkboxes stay locked).

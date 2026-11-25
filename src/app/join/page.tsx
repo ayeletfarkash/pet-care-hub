@@ -6,6 +6,7 @@ import { previewInvitation } from "@/server/services/invitations";
 import { fmt } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { ActionForm } from "@/components/forms/action-form";
+import { Notice } from "@/components/notice";
 import { LinkButton } from "@/components/ui/buttons";
 import { SpeciesIcon } from "@/components/species-icon";
 
@@ -14,13 +15,14 @@ export async function generateMetadata() {
   return { title: t.join.title };
 }
 
-export default async function JoinPage() {
-  const [{ t }, user] = await Promise.all([getT(), getCurrentUser()]);
+export default async function JoinPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
+  const [{ t }, user, sp] = await Promise.all([getT(), getCurrentUser(), searchParams]);
   const token = (await cookies()).get(INVITE_COOKIE)?.value;
   const inv = token ? await previewInvitation(token) : null;
 
   return (
     <div className="mx-auto max-w-md">
+      <Notice t={t} notice={sp.notice} />
       <h1 className="mb-6 text-3xl font-bold">{t.join.title}</h1>
       {!inv ? (
         <p role="alert" className="rounded-xl border-2 border-danger bg-danger-bg p-4 font-semibold text-danger">{t.join.invalid}</p>
