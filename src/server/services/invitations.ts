@@ -9,18 +9,17 @@ import type { InvitationInput } from "../validation";
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Returns the raw token. Lookups use its hash; an encrypted copy lets admins share the link again. */
+/** Returns the raw token. Lookups use its hash; an encrypted copy lets members share the link again. */
 export async function createInvitation(actorId: string, groupId: string, input: InvitationInput) {
   const token = newToken();
   await writeTx(async (tx) => {
-    await requireMembership(tx, actorId, groupId, "admin");
+    await requireMembership(tx, actorId, groupId);
     const [inv] = await tx
       .insert(invitations)
       .values({
         groupId,
         tokenHash: hashToken(token),
         tokenEnc: encryptToken(token),
-        role: input.role,
         email: input.email ?? null,
         reusable: input.email ? false : input.reusable, // email invites are always single-use
         expiresAt: new Date(Date.now() + input.expiresInDays * DAY),
@@ -29,7 +28,7 @@ export async function createInvitation(actorId: string, groupId: string, input: 
       .returning({ id: invitations.id });
     await audit(tx, {
       groupId, actorId, action: "invitation.created",
-      meta: { invitationId: inv.id, role: input.role, reusable: input.reusable, byEmail: !!input.email },
+      meta: { invitationId: inv.id, reusable: input.reusable, byEmail: !!input.email },
     });
   });
   return token;
@@ -37,11 +36,11 @@ export async function createInvitation(actorId: string, groupId: string, input: 
 
 /** Active (usable) invitations for the members page. */
 export async function listActiveInvitations(actorId: string, groupId: string) {
-  await requireMembership(db, actorId, groupId, "admin");
+  await requireMembership(db, actorId, groupId);
   const rows = await db
     .select({
       tokenEnc: invitations.tokenEnc,
-      id: invitations.id, role: invitations.role, email: invitations.email, reusable: invitations.reusable,
+      id: invitations.id, email: invitations.email, reusable: invitations.reusable,
       useCount: invitations.useCount, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt,
     })
     .from(invitations)
@@ -60,7 +59,7 @@ export async function listActiveInvitations(actorId: string, groupId: string) {
 
 export async function revokeInvitation(actorId: string, groupId: string, invitationId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, actorId, groupId, "admin");
+    await requireMembership(tx, actorId, groupId);
     const res = await tx
       .update(invitations)
       .set({ revokedAt: new Date() })
@@ -81,7 +80,7 @@ const usable = () =>
 /** Public preview for the join page. Any failure -> null (no hint why). */
 export async function previewInvitation(token: string) {
   const row = await db
-    .select({ petName: pets.name, species: pets.species, role: invitations.role, email: invitations.email, groupId: invitations.groupId })
+    .select({ petName: pets.name, species: pets.species, email: invitations.email, groupId: invitations.groupId })
     .from(invitations)
     .innerJoin(groups, eq(groups.id, invitations.groupId))
     .innerJoin(pets, eq(pets.groupId, groups.id))
@@ -94,7 +93,7 @@ export async function previewInvitation(token: string) {
 export async function acceptInvitation(userId: string, token: string) {
   return writeTx(async (tx) => {
     const inv = await tx
-      .select({ id: invitations.id, groupId: invitations.groupId, role: invitations.role, email: invitations.email })
+      .select({ id: invitations.id, groupId: invitations.groupId, email: invitations.email })
       .from(invitations)
       .innerJoin(groups, eq(groups.id, invitations.groupId))
       .where(and(eq(invitations.tokenHash, hashToken(token)), usable()))
@@ -127,8 +126,8 @@ export async function acceptInvitation(userId: string, token: string) {
       );
     if (res.rowsAffected !== 1) throw new AppError("invite_invalid");
 
-    await tx.insert(memberships).values({ groupId: inv.groupId, userId, role: inv.role });
-    await audit(tx, { groupId: inv.groupId, actorId: userId, action: "member.joined", targetUserId: userId, meta: { role: inv.role } });
+    await tx.insert(memberships).values({ groupId: inv.groupId, userId });
+    await audit(tx, { groupId: inv.groupId, actorId: userId, action: "member.joined", targetUserId: userId });
     return inv.groupId;
   });
 }

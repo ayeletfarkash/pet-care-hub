@@ -29,6 +29,8 @@ export const formatLocalTime = (l: Locale, s: string) =>
   new Intl.DateTimeFormat(intlLocale(l), { timeStyle: "short", timeZone: "UTC" }).format(wall(s));
 export const formatDayHeading = (l: Locale, d: string) =>
   new Intl.DateTimeFormat(intlLocale(l), { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(wall(d));
+export const formatWeekday = (l: Locale, d: string, style: "long" | "short" | "narrow") =>
+  new Intl.DateTimeFormat(intlLocale(l), { weekday: style, timeZone: "UTC" }).format(wall(d));
 export const formatMonth = (l: Locale, ym: string) =>
   new Intl.DateTimeFormat(intlLocale(l), { month: "long", year: "numeric", timeZone: "UTC" }).format(wall(`${ym}-01`));
 /** List formatting ("08:00, 14:00 and 20:00" / "08:00, 14:00 ו-20:00"). */

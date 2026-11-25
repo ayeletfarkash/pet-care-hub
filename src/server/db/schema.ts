@@ -7,8 +7,6 @@ const createdAt = () =>
 
 export const LOCALES = ["he", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
-export const ROLES = ["admin", "caregiver"] as const;
-export type Role = (typeof ROLES)[number];
 
 export const users = sqliteTable("users", {
   id: id(),
@@ -85,7 +83,7 @@ export const memberships = sqliteTable(
     id: id(),
     groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ROLES }).notNull(),
+    role: text("role").notNull().$default(() => "admin"), // unused since roles were removed; kept so no data is lost
     joinedAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_group_user_uq").on(t.groupId, t.userId), index("memberships_user_idx").on(t.userId)],
@@ -98,7 +96,7 @@ export const invitations = sqliteTable(
     groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull().unique(),
     tokenEnc: text("token_enc"), // AES-GCM encrypted token, so active links can be shared again; null for older rows
-    role: text("role", { enum: ROLES }).notNull().default("caregiver"),
+    role: text("role").notNull().default("caregiver"), // unused, see memberships.role
     email: text("email"), // set for email invitations; only that address may accept
     reusable: integer("reusable", { mode: "boolean" }).notNull().default(false),
     useCount: integer("use_count").notNull().default(0),
@@ -286,7 +284,7 @@ export const tasks = sqliteTable(
   ],
 );
 
-/** Keys of automatic tasks an Admin deleted, so the generator does not create them again. */
+/** Keys of automatic tasks a member deleted, so the generator does not create them again. */
 export const dismissedAutoTasks = sqliteTable(
   "dismissed_auto_tasks",
   { groupId: groupRef(), sourceKey: text("source_key").notNull() },

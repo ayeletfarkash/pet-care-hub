@@ -2,17 +2,16 @@ import { expect, test } from "@playwright/test";
 import { createPet, expectNoA11yViolations, register, uniqueEmail, useEnglish } from "./helpers";
 
 test.describe("Phase 1 acceptance", () => {
-  test("register, create a pet, invite a caregiver who joins; roles and isolation hold", async ({ browser }) => {
+  test("register, create a pet, invite someone who joins with equal rights; isolation holds", async ({ browser }) => {
     // Admin
     const adminCtx = await browser.newContext();
     const admin = await adminCtx.newPage();
     await register(admin, "Dana Admin", uniqueEmail("admin"));
     await expect(admin.getByRole("heading", { level: 1, name: "Hello, Dana Admin" })).toBeVisible();
     const groupId = await createPet(admin, "Rex");
-    await expect(admin.getByText("Your role: Admin")).toBeVisible();
     const privateGroupId = await createPet(admin, "Secret Cat", "cat");
 
-    // Invitation link (one-time, caregiver by default)
+    // Invitation link (one-time by default)
     await admin.goto(`/groups/${groupId}/members`);
     await admin.getByRole("button", { name: "Create link" }).click();
     const link = await admin.getByLabel("Invitation link").inputValue();
@@ -38,11 +37,15 @@ test.describe("Phase 1 acceptance", () => {
     await user.getByRole("link", { name: /Create an account to join|יצירת חשבון להצטרפות/ }).click();
     await register(user, "Gal Caregiver", uniqueEmail("care"));
     await expect(user.getByRole("heading", { level: 1, name: "Rex" })).toBeVisible();
-    await expect(user.getByText("Your role: Caregiver")).toBeVisible();
-    await expect(user.getByRole("link", { name: "Edit profile" })).toHaveCount(0);
 
-    // Caregiver can't open the edit page or another group (same 404 as a missing group)
-    await user.goto(`/groups/${groupId}/edit`);
+    // Members are equal: the invitee can edit the pet and manage members
+    await expect(user.getByRole("link", { name: "Edit profile" })).toBeVisible();
+    await user.goto(`/groups/${groupId}/members`);
+    await expect(user.getByRole("button", { name: "Remove: Dana Admin" })).toBeVisible();
+    await expect(user.getByRole("button", { name: "Create link" })).toBeVisible();
+
+    // …but can't open a group they aren't in (same 404 as a missing group)
+    await user.goto(`/groups/${privateGroupId}/edit`);
     await expect(user.getByRole("heading", { name: "Page not found" })).toBeVisible();
     await user.goto(`/groups/${privateGroupId}`);
     await expect(user.getByRole("heading", { name: "Page not found" })).toBeVisible();
@@ -55,23 +58,17 @@ test.describe("Phase 1 acceptance", () => {
     await third.goto(link);
     await expect(third.getByRole("alert").filter({ hasText: /not valid|אינו תקף/ })).toBeVisible();
 
-    // Different roles in different groups: caregiver creates their own pet and is Admin there
+    // Someone can be in several groups
     await createPet(user, "Mitzi", "rabbit");
-    await expect(user.getByText("Your role: Admin")).toBeVisible();
     await user.goto("/");
-    await expect(user.getByRole("listitem").filter({ hasText: "Rex" })).toContainText("Caregiver");
-    await expect(user.getByRole("listitem").filter({ hasText: "Mitzi" })).toContainText("Admin");
+    await expect(user.getByRole("listitem").filter({ hasText: "Rex" }).first()).toBeVisible();
+    await expect(user.getByRole("listitem").filter({ hasText: "Mitzi" }).first()).toBeVisible();
 
-    // Admin promotes the caregiver
-    await admin.goto(`/groups/${groupId}/members`);
-    await admin.getByRole("row", { name: /Gal Caregiver/ }).getByRole("button", { name: "Make Admin" }).click();
-    await expect(admin.getByRole("status").filter({ hasText: "Role updated." })).toBeVisible();
-
-    // Last admin can't leave their private group
+    // The last member can't leave
     await admin.goto(`/groups/${privateGroupId}`);
     await admin.getByRole("button", { name: "Leave group" }).click();
     await admin.getByRole("dialog").getByRole("button", { name: "Leave group" }).click();
-    await expect(admin.getByRole("dialog").getByRole("alert").filter({ hasText: "at least one Admin" })).toBeVisible();
+    await expect(admin.getByRole("dialog").getByRole("alert").filter({ hasText: "You're the last member" })).toBeVisible();
 
     await Promise.all([adminCtx.close(), userCtx.close(), thirdCtx.close()]);
   });

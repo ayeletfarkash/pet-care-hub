@@ -5,12 +5,12 @@ import { cookies } from "next/headers";
 import { inviteLink } from "@/server/invite-link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
-import { changeRole, removeMember } from "@/server/services/members";
+import { removeMember } from "@/server/services/members";
 import { acceptInvitation, createInvitation, revokeInvitation } from "@/server/services/invitations";
 import { getPetForMember } from "@/server/services/pets";
 import { sendInvitationEmail } from "@/server/mailer";
 import { rateLimit } from "@/server/rate-limit";
-import { invitationSchema, roleSchema } from "@/server/validation";
+import { invitationSchema } from "@/server/validation";
 import { AppError } from "@/server/errors";
 import { fmt } from "@/i18n";
 import { getT } from "@/i18n/server";
@@ -19,19 +19,6 @@ import { INVITE_COOKIE } from "./invite-cookie";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 const membersPath = (g: string) => `/groups/${g}/members`;
-
-
-export async function changeRoleAction(_: FormState, fd: FormData): Promise<FormState> {
-  const user = await requireUser();
-  const groupId = str(fd, "groupId");
-  return handleAction(async () => {
-    const role = roleSchema.parse(str(fd, "role"));
-    await changeRole(user.id, groupId, str(fd, "userId"), role);
-    revalidatePath(membersPath(groupId));
-    const { t } = await getT();
-    return { ok: true, message: t.members.roleChanged };
-  });
-}
 
 export async function removeMemberAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();

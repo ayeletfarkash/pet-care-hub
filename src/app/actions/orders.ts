@@ -10,7 +10,6 @@ import { handleAction, handleForm, type FormState } from "./form";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 
-/** Both roles. */
 export async function createOrderAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");
@@ -38,7 +37,6 @@ export async function deleteOrderAction(_: FormState, fd: FormData): Promise<For
   });
 }
 
-/** Both roles. */
 export async function orderStatusAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId"), orderId = str(fd, "orderId");

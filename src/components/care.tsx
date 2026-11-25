@@ -6,6 +6,7 @@ import type { Activity } from "@/server/services/routines";
 import { markDoseAction } from "@/app/actions/medications";
 import { logActivityAction } from "@/app/actions/routines";
 import { ActionForm } from "./forms/action-form";
+import { CompletionCheckbox, NoCheckbox } from "./forms/completion-checkbox";
 
 type Tone = "neutral" | "success" | "danger" | "info";
 const tones: Record<Tone, string> = {
@@ -26,16 +27,24 @@ export function Badge({ tone = "neutral", children }: { tone?: Tone; children: R
   );
 }
 
+/** An activity row: checkbox at the start, then the body; trailing buttons wrap below on narrow screens. */
+export const rowClass = "card flex flex-wrap items-center gap-3 rounded-xl border-2 border-divider bg-surface p-3";
+export const rowBodyClass = "min-w-40 flex-1";
+
 export const taskTone = { new: "info", in_progress: "info", completed: "success", cancelled: "neutral" } as const satisfies Record<string, Tone>;
 export const doseTone: Record<Dose["status"], Tone> = { given: "success", missed: "danger", due: "info", upcoming: "neutral" };
 
-/** One scheduled dose with its status and, when relevant, a "Mark as given" button. */
+/** One scheduled dose with a checkbox that records it as given. A recorded dose is locked: only the plan's history can correct it. */
 export function DoseItem({ t, locale, dose, showDate, petName }: { t: Dict; locale: Locale; dose: Dose; showDate?: boolean; petName?: string }) {
   const m = t.meds;
   const when = showDate ? formatLocalDateTime(locale, dose.scheduledFor) : formatLocalTime(locale, dose.scheduledFor);
   return (
-    <li className="card flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-divider bg-surface p-3">
-      <div className="min-w-0">
+    <li className={rowClass}>
+      {dose.status === "upcoming" ? <NoCheckbox /> : (
+        <CompletionCheckbox action={markDoseAction} on={{ groupId: dose.groupId, planId: dose.planId, scheduledFor: dose.scheduledFor }} lockedMessage={m.recordLocked}
+          completed={dose.status === "given"} label={fmt(m.markGivenLabel, { name: dose.name, time: formatLocalDateTime(locale, dose.scheduledFor) }) + (petName ? `, ${petName}` : "")} />
+      )}
+      <div className={rowBodyClass}>
         <p className="font-bold">
           <span className="ltr-value">{when}</span> · {dose.name}
           {petName && <span className="font-normal text-muted"> · {petName}</span>}
@@ -48,10 +57,6 @@ export function DoseItem({ t, locale, dose, showDate, petName }: { t: Dict; loca
           </p>
         )}
       </div>
-      {dose.status !== "given" && dose.status !== "upcoming" && (
-        <ActionForm action={markDoseAction} fields={{ groupId: dose.groupId, planId: dose.planId, scheduledFor: dose.scheduledFor }}
-          label={m.markGiven} ariaLabel={fmt(m.markGivenLabel, { name: dose.name, time: when }) + (petName ? `, ${petName}` : "")} pendingLabel={t.common.saving} variant="primary" />
-      )}
     </li>
   );
 }
@@ -86,15 +91,19 @@ export function StockBadge({ t, item }: { t: Dict; item: { depleted: boolean; ne
 
 export const activityTone: Record<Activity["status"], Tone> = { completed: "success", missed: "danger", not_logged: "danger", due: "info", upcoming: "neutral" };
 
-/** One scheduled routine activity with its status and "done" / "missed" buttons while it can be logged. */
+/** One scheduled routine activity: a checkbox logs it as done (then locked, like a dose) and a button reports it missed. */
 export function ActivityItem({ t, locale, a, showDate, petName }: { t: Dict; locale: Locale; a: Activity; showDate?: boolean; petName?: string }) {
   const r = t.routines;
   const when = showDate ? formatLocalDateTime(locale, a.scheduledFor) : formatLocalTime(locale, a.scheduledFor);
   const fields = { groupId: a.groupId, routineId: a.routineId, scheduledFor: a.scheduledFor };
   const ctx = petName ? `, ${petName}` : "";
   return (
-    <li className="card flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-divider bg-surface p-3">
-      <div className="min-w-0">
+    <li className={rowClass}>
+      {a.status === "upcoming" ? <NoCheckbox /> : (
+        <CompletionCheckbox action={logActivityAction} on={{ ...fields, status: "completed" }} lockedMessage={r.recordLocked}
+          completed={a.status === "completed"} label={fmt(r.markDoneLabel, { name: a.name, time: when }) + ctx} />
+      )}
+      <div className={rowBodyClass}>
         <p className="font-bold">
           <span className="ltr-value">{when}</span> · {a.name}
           {petName && <span className="font-normal text-muted"> · {petName}</span>}
@@ -102,15 +111,9 @@ export function ActivityItem({ t, locale, a, showDate, petName }: { t: Dict; loc
         <p className="mt-1"><Badge tone={activityTone[a.status]}>{r.status[a.status]}</Badge></p>
         {a.log && <p className="mt-1 text-sm text-muted">{fmt(r.loggedBy, { name: a.log.byName ?? t.ui.formerMember, time: formatLocalDateTime(locale, a.log.at) })}</p>}
       </div>
-      {a.status !== "completed" && a.status !== "upcoming" && (
-        <div className="flex flex-wrap gap-2">
-          <ActionForm action={logActivityAction} fields={{ ...fields, status: "completed" }} label={r.markDone}
-            ariaLabel={fmt(r.markDoneLabel, { name: a.name, time: when }) + ctx} pendingLabel={t.common.saving} variant="primary" />
-          {a.status !== "missed" && (
-            <ActionForm action={logActivityAction} fields={{ ...fields, status: "missed" }} label={r.markMissed}
-              ariaLabel={fmt(r.markMissedLabel, { name: a.name, time: when }) + ctx} pendingLabel={t.common.saving} variant="secondary" />
-          )}
-        </div>
+      {(a.status === "due" || a.status === "not_logged") && (
+        <ActionForm action={logActivityAction} fields={{ ...fields, status: "missed" }} label={r.markMissed}
+          ariaLabel={fmt(r.markMissedLabel, { name: a.name, time: when }) + ctx} pendingLabel={t.common.saving} variant="secondary" />
       )}
     </li>
   );

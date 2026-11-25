@@ -39,7 +39,7 @@ const code = async (p: Promise<unknown>) => {
 async function setup() {
   const admin = await makeUser("Admin"), care = await makeUser("Care"), out = await makeUser("Out");
   const g = await makeGroup(admin.id), gOut = await makeGroup(out.id, "Other");
-  const token = await createInvitation(admin.id, g, { role: "caregiver", reusable: false, email: null, expiresInDays: 7 });
+  const token = await createInvitation(admin.id, g, { reusable: false, email: null, expiresInDays: 7 });
   await acceptInvitation(care.id, token);
   return { admin: admin.id, care: care.id, out: out.id, g, gOut };
 }
@@ -135,18 +135,17 @@ describe("reminder sweep", () => {
 });
 
 describe("reminder rules and inbox permissions", () => {
-  it("checks roles, sources and recipients", async () => {
+  it("checks membership, sources and recipients", async () => {
     const s = await setup();
     const plan = await createPlan(s.admin, s.g, medicationPlanSchema.parse({ name: "P", dosage: "1", scheduleType: "daily", times: ["08:00"], startDate: at(0).date }));
     const tId = await createTask(s.admin, s.g, task(60));
-    expect(await code(setReminderRule(s.care, s.g, "medication", plan, rule({})))).toBe("forbidden");
+    expect(await code(setReminderRule(s.care, s.g, "medication", plan, rule({})))).toBe("ok"); // any member
     expect(await code(setReminderRule(s.care, s.g, "task", tId, rule({ recipientMode: "all" })))).toBe("ok");
     expect(await code(setReminderRule(s.out, s.g, "task", tId, rule({})))).toBe("not_found");
     expect(await code(setReminderRule(s.out, s.gOut, "task", tId, rule({})))).toBe("not_found"); // id from another group
     expect(await code(setReminderRule(s.admin, s.g, "task", tId, rule({ recipientMode: "selected", recipients: [s.out] })))).toBe("invalid_assignee");
     expect(reminderRuleSchema.safeParse({ leadMinutes: "7", recipientMode: "all" }).success).toBe(false);
     expect(reminderRuleSchema.safeParse({ leadMinutes: "0", recipientMode: "selected" }).success).toBe(false);
-    expect((await getReminderRule(s.care, s.g, "medication", plan)).canEdit).toBe(false);
     expect((await getReminderRule(s.care, s.g, "task", tId)).recipientMode).toBe("all");
   });
 
@@ -283,13 +282,12 @@ describe("custom reminder time and task deletion (tasks UI update)", () => {
     expect((await getReminderRule(s.admin, s.g, "task", await nextOf(custom))).remindAt).toBe(addMinutesLocal(remindAt!, 2 * 1440));
   });
 
-  it("admins delete permanently; dependents go with it; others' groups untouched", async () => {
+  it("members delete permanently; dependents go with it; others' groups untouched", async () => {
     const s = await setup();
     const id = await createTask(s.care, s.g, task(-5, { assignees: [s.care], reminder: "15" }));
     await addComment(s.care, s.g, id, "hi");
     await sweep();
     expect(await mine(s.care, id)).toHaveLength(1);
-    expect(await code(deleteTask(s.care, s.g, id))).toBe("forbidden");
     expect(await code(deleteTask(s.out, s.gOut, id))).toBe("not_found");
     await deleteTask(s.admin, s.g, id);
     expect(await code(getTask(s.admin, s.g, id))).toBe("not_found");

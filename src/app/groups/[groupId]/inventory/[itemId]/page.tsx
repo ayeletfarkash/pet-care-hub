@@ -17,8 +17,8 @@ import { loadGroup } from "../../load";
 export default async function ItemPage({ params, searchParams }: { params: Promise<{ groupId: string; itemId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, itemId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { item: i, history, role } = await getItem(user.id, groupId, itemId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
-  const k = t.inventory, isAdmin = role === "admin";
+  const { item: i, history } = await getItem(user.id, groupId, itemId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
+  const k = t.inventory;
   const q = (n: number) => qtyText(locale, n, i.unit);
   const th = "border-b-2 border-line px-3 py-2 text-start font-semibold";
   const td = "border-b border-divider px-3 py-2";
@@ -34,7 +34,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
         </div>
         <div className="flex flex-wrap gap-2">
           {i.needsReorder && <LinkButton variant="secondary" href={`/groups/${groupId}/orders/new?item=${itemId}`}>{t.orders.add}</LinkButton>}
-          {isAdmin && <LinkButton variant="secondary" href={`/groups/${groupId}/inventory/${itemId}/edit`}>{t.ui.edit}</LinkButton>}
+          <LinkButton variant="secondary" href={`/groups/${groupId}/inventory/${itemId}/edit`}>{t.ui.edit}</LinkButton>
         </div>
       </div>
       <dl className="card mb-6 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
@@ -88,13 +88,11 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
         )}
       </section>
 
-      {isAdmin && (
-        <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
-          <ConfirmDialog triggerLabel={k.deleteItem} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { name: i.name })} body={k.deleteBody}>
-            <ActionForm action={deleteItemAction} fields={{ groupId, itemId }} label={k.deleteItem} pendingLabel={t.common.saving} variant="danger" />
-          </ConfirmDialog>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
+        <ConfirmDialog triggerLabel={k.deleteItem} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { name: i.name })} body={k.deleteBody}>
+          <ActionForm action={deleteItemAction} fields={{ groupId, itemId }} label={k.deleteItem} pendingLabel={t.common.saving} variant="danger" />
+        </ConfirmDialog>
+      </div>
     </div>
   );
 }

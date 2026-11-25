@@ -101,6 +101,14 @@ export function monthRange(ym: string): { from: LocalDate; to: LocalDate } {
   const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) - 1;
   return { from: `${ym}-01`, to: `${ym}-${pad(daysInMonth(y, m))}` };
 }
+/** The month as Sunday-first weeks; null pads the days outside it. */
+export function monthWeeks(ym: string): (LocalDate | null)[][] {
+  const { from, to } = monthRange(ym);
+  const cells: (LocalDate | null)[] = Array(weekday(from)).fill(null);
+  for (let i = 0; i < Number(to.slice(8)); i++) cells.push(addDays(from, i)); // counted: past 9999-12-31 dates no longer compare as strings
+  while (cells.length % 7) cells.push(null);
+  return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
+}
 export const shiftMonth = (ym: string, n: number) => addMonthsClamped(`${ym}-01`, n).slice(0, 7);
 
 export const REORDER_LEAD_DAYS = 7; // reorder reminder when stock is estimated to last a week or less

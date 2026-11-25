@@ -20,9 +20,9 @@ import { ReminderSection } from "@/components/reminder-section";
 export default async function RoutinePage({ params, searchParams }: { params: Promise<{ groupId: string; routineId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, routineId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { routine: x, role } = await getRoutine(user.id, groupId, routineId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
+  const { routine: x } = await getRoutine(user.id, groupId, routineId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
   const [history, members] = await Promise.all([routineHistory(user.id, groupId, routineId), listMembers(user.id, groupId)]);
-  const r = t.routines, m = t.meds, isAdmin = role === "admin";
+  const r = t.routines, m = t.meds;
   const active = !x.endDate || x.endDate >= todayLocal();
   const responsible = members.find((u) => u.userId === x.responsibleUserId)?.name;
   const th = "border-b-2 border-line px-3 py-2 text-start font-semibold";
@@ -36,7 +36,7 @@ export default async function RoutinePage({ params, searchParams }: { params: Pr
           <h1 className="text-3xl font-bold">{x.name}</h1>
           <p className="mt-1"><Badge tone={active ? "success" : "neutral"}>{active ? r.active : r.ended}</Badge></p>
         </div>
-        {isAdmin && <LinkButton variant="secondary" href={`/groups/${groupId}/routines/${routineId}/edit`}>{t.ui.edit}</LinkButton>}
+        <LinkButton variant="secondary" href={`/groups/${groupId}/routines/${routineId}/edit`}>{t.ui.edit}</LinkButton>
       </div>
       <dl className="card mb-6 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
         <dt className="font-semibold text-muted">{r.schedule}</dt>
@@ -69,7 +69,7 @@ export default async function RoutinePage({ params, searchParams }: { params: Pr
               <thead><tr>
                 <th scope="col" className={th}>{r.scheduledFor}</th><th scope="col" className={th}>{t.tasks.status}</th>
                 <th scope="col" className={th}>{r.loggedAt}</th><th scope="col" className={th}>{t.ui.by}</th><th scope="col" className={th}>{t.ui.notes}</th>
-                {isAdmin && <th scope="col" className={th}><span className="sr-only">{t.members.actions}</span></th>}
+                <th scope="col" className={th}><span className="sr-only">{t.members.actions}</span></th>
               </tr></thead>
               <tbody>
                 {history.map((h) => {
@@ -81,12 +81,10 @@ export default async function RoutinePage({ params, searchParams }: { params: Pr
                       <td className={td}>{formatLocalDateTime(locale, h.at)}</td>
                       <td className={td}>{h.byName ?? t.ui.formerMember}</td>
                       <td className={td}>{h.notes}</td>
-                      {isAdmin && (
-                        <td className={td}>
-                          <ActionForm action={removeLogAction} fields={{ groupId, logId: h.id }} label={r.removeLog}
-                            ariaLabel={fmt(r.removeLogLabel, { time: h.scheduledFor ? when : formatLocalDateTime(locale, h.at) })} pendingLabel={t.common.saving} variant="ghost" />
-                        </td>
-                      )}
+                      <td className={td}>
+                        <ActionForm action={removeLogAction} fields={{ groupId, logId: h.id }} label={r.removeLog}
+                          ariaLabel={fmt(r.removeLogLabel, { time: h.scheduledFor ? when : formatLocalDateTime(locale, h.at) })} pendingLabel={t.common.saving} variant="ghost" />
+                      </td>
                     </tr>
                   );
                 })}
@@ -96,18 +94,16 @@ export default async function RoutinePage({ params, searchParams }: { params: Pr
         )}
       </section>
 
-      {isAdmin && (
-        <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
-          {active && (
-            <ConfirmDialog triggerLabel={r.endRoutine} triggerVariant="secondary" cancelLabel={t.common.cancel} title={fmt(r.endTitle, { name: x.name })} body={r.endBody}>
-              <ActionForm action={endRoutineAction} fields={{ groupId, routineId }} label={r.endRoutine} pendingLabel={t.common.saving} variant="danger" />
-            </ConfirmDialog>
-          )}
-          <ConfirmDialog triggerLabel={r.deleteRoutine} cancelLabel={t.common.cancel} title={fmt(r.deleteTitle, { name: x.name })} body={r.deleteBody}>
-            <ActionForm action={deleteRoutineAction} fields={{ groupId, routineId }} label={r.deleteRoutine} pendingLabel={t.common.saving} variant="danger" />
+      <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
+        {active && (
+          <ConfirmDialog triggerLabel={r.endRoutine} triggerVariant="secondary" cancelLabel={t.common.cancel} title={fmt(r.endTitle, { name: x.name })} body={r.endBody}>
+            <ActionForm action={endRoutineAction} fields={{ groupId, routineId }} label={r.endRoutine} pendingLabel={t.common.saving} variant="danger" />
           </ConfirmDialog>
-        </div>
-      )}
+        )}
+        <ConfirmDialog triggerLabel={r.deleteRoutine} cancelLabel={t.common.cancel} title={fmt(r.deleteTitle, { name: x.name })} body={r.deleteBody}>
+          <ActionForm action={deleteRoutineAction} fields={{ groupId, routineId }} label={r.deleteRoutine} pendingLabel={t.common.saving} variant="danger" />
+        </ConfirmDialog>
+      </div>
     </div>
   );
 }

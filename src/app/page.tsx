@@ -16,7 +16,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const [{ t, locale }, sp, groups, restorable] = await Promise.all([
     getT(), searchParams, listUserGroups(user.id), listRestorableGroups(user.id),
   ]);
-  const admins = groups.filter((g) => g.role === "admin").length;
   const [stats, insights] = await Promise.all([groupTaskStats(groups.map((g) => g.groupId)), groups.length ? insightsFor(user.id) : []]);
   // At a glance: only what needs action (upcoming items are already in Today).
   const attention = insights.filter((i) => ["overdue_tasks", "struggling_series", "low_stock", "running_out", "missed_activities"].includes(i.kind));
@@ -26,7 +25,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <Notice t={t} notice={sp.notice} reason={sp.reason} />
       <h1 className="text-3xl font-bold">{fmt(t.dashboard.greeting, { name: user.name })}</h1>
-      {groups.length > 0 && <p className="mt-1 text-muted">{fmt(t.dashboard.summary, { count: groups.length, admins })}</p>}
+      {groups.length > 0 && <p className="mt-1 text-muted">{fmt(t.dashboard.summary, { count: groups.length })}</p>}
       {groups.length > 0 && (
         <section aria-labelledby="glance-h" className="mt-8">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -75,7 +74,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <p className="text-sm text-muted">
                     {g.species === "other" && g.speciesOther ? g.speciesOther : t.species[g.species]}
                   </p>
-                  <p className="mt-1 inline-block rounded-full border border-line px-2 text-sm font-semibold">{t.roles[g.role]}</p>
                   <p className="mt-1 text-sm">{fmt(t.today.groupStats, { open: stats.get(g.groupId)?.open ?? 0, overdue: stats.get(g.groupId)?.overdue ?? 0 })}</p>
                 </div>
               </li>

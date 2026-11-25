@@ -1,12 +1,13 @@
 import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { eventOccurrenceStatus, events, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { occurrences, type LocalDate } from "../schedule";
 import type { EventInput } from "../validation";
 
-// PRD §7: both roles view, create, complete and cancel; only Admins edit or delete.
+// PRD §7.
 
 export type EventRow = typeof events.$inferSelect;
 export type Occurrence = {
@@ -44,7 +45,7 @@ export async function groupOccurrences(userId: string, groupId: string, from: Lo
 }
 
 export async function getEvent(userId: string, groupId: string, eventId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const row = await db
     .select({ e: events, assigneeName: users.name })
     .from(events)
@@ -55,7 +56,7 @@ export async function getEvent(userId: string, groupId: string, eventId: string)
   const statuses = await db.select().from(eventOccurrenceStatus)
     .where(and(eq(eventOccurrenceStatus.eventId, eventId), eq(eventOccurrenceStatus.groupId, groupId)))
     .orderBy(asc(eventOccurrenceStatus.occurrence));
-  return { event: row.e, assigneeName: row.assigneeName, statuses, role };
+  return { event: row.e, assigneeName: row.assigneeName, statuses };
 }
 
 export async function createEvent(userId: string, groupId: string, input: EventInput) {
@@ -69,7 +70,7 @@ export async function createEvent(userId: string, groupId: string, input: EventI
 
 export async function updateEvent(userId: string, groupId: string, eventId: string, input: EventInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, [input.assigneeId]);
     const res = await tx.update(events).set({ ...input, updatedAt: new Date() }).where(and(eq(events.id, eventId), eq(events.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
@@ -79,13 +80,14 @@ export async function updateEvent(userId: string, groupId: string, eventId: stri
 
 export async function deleteEvent(userId: string, groupId: string, eventId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
-    const res = await tx.delete(events).where(and(eq(events.id, eventId), eq(events.groupId, groupId)));
-    if (res.rowsAffected === 0) throw new AppError("not_found");
+    await requireMembership(tx, userId, groupId);
+    const [e] = await tx.delete(events).where(and(eq(events.id, eventId), eq(events.groupId, groupId))).returning();
+    if (!e) throw new AppError("not_found");
+    await audit(tx, { groupId, actorId: userId, action: "event.deleted", meta: { id: e.id, title: e.title, startsAt: e.startsAt } });
   });
 }
 
-/** Mark one occurrence completed/cancelled, or clear the mark (null). Both roles. */
+/** Mark one occurrence completed/cancelled, or clear the mark (null). */
 export async function setOccurrenceStatus(userId: string, groupId: string, eventId: string, occurrence: string, status: "completed" | "cancelled" | null) {
   if (!/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(occurrence) || Number.isNaN(Date.parse(`${occurrence}:00Z`))) throw new AppError("invalid_occurrence");
   try {

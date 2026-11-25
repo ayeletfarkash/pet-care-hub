@@ -23,12 +23,12 @@ type NewTask = {
 export async function generateAutoTasks(groupIds: string[], now = new Date()): Promise<number> {
   if (groupIds.length === 0) return 0;
   const nowL = nowLocal(now);
-  // Task text is stored, so it is written in the language of the group's first Admin.
-  const admins = await db.select({ groupId: memberships.groupId, locale: users.locale }).from(memberships)
+  // Task text is stored, so it is written in the language of the group's longest-standing member.
+  const joined = await db.select({ groupId: memberships.groupId, locale: users.locale }).from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
-    .where(and(inArray(memberships.groupId, groupIds), eq(memberships.role, "admin"))).orderBy(asc(memberships.joinedAt));
+    .where(inArray(memberships.groupId, groupIds)).orderBy(asc(memberships.joinedAt));
   const localeOf = new Map<string, Locale>();
-  for (const a of admins) if (!localeOf.has(a.groupId)) localeOf.set(a.groupId, a.locale);
+  for (const m of joined) if (!localeOf.has(m.groupId)) localeOf.set(m.groupId, m.locale);
   const text = (gid: string) => dictionaries[localeOf.get(gid) ?? "he"].tasks.auto;
   const out: NewTask[] = [];
 
@@ -85,7 +85,7 @@ export async function generateAutoTasks(groupIds: string[], now = new Date()): P
   return writeTx(async (t) => {
     let created = 0;
     for (const { assignee, ...n } of out) {
-      if (dismissed.has(`${n.groupId}|${n.sourceKey}`)) continue; // an Admin deleted it
+      if (dismissed.has(`${n.groupId}|${n.sourceKey}`)) continue; // a member deleted it
       const [row] = await t.insert(tasks).values({ ...n, seriesId: crypto.randomUUID() }).onConflictDoNothing().returning({ id: tasks.id });
       if (!row) continue; // already generated earlier
       created++;

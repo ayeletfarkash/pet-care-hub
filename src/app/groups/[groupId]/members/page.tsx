@@ -8,7 +8,7 @@ import { InviteForm } from "@/components/forms/invite-forms";
 import { InviteShare } from "@/components/forms/invite-share";
 import { inviteLink } from "@/server/invite-link";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { changeRoleAction, removeMemberAction, revokeInviteAction } from "@/app/actions/members";
+import { removeMemberAction, revokeInviteAction } from "@/app/actions/members";
 import { loadGroup } from "../load";
 
 export async function generateMetadata({ params }: { params: Promise<{ groupId: string }> }) {
@@ -18,11 +18,10 @@ export async function generateMetadata({ params }: { params: Promise<{ groupId: 
 
 export default async function MembersPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const [{ user, pet, role }, { t, locale }] = await Promise.all([loadGroup(groupId), getT()]);
-  const isAdmin = role === "admin";
+  const [{ user, pet }, { t, locale }] = await Promise.all([loadGroup(groupId), getT()]);
   const [members, invites] = await Promise.all([
     listMembers(user.id, groupId),
-    isAdmin ? listActiveInvitations(user.id, groupId) : Promise.resolve([]),
+    listActiveInvitations(user.id, groupId),
   ]);
   const links = await Promise.all(invites.map((inv) => (inv.token ? inviteLink(inv.token) : null)));
   const m = t.members, i = t.invites;
@@ -36,7 +35,7 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
 
       <section aria-labelledby="members-h">
         <h2 id="members-h" className="mb-2 text-2xl font-bold">{t.group.members}</h2>
-        {isAdmin && <p className="mb-3 text-sm text-muted">{m.lastAdminNote}</p>}
+        <p className="mb-3 text-sm text-muted">{m.lastMemberNote}</p>
         {/* Scrollable region is focusable so keyboard users can scroll it on narrow screens. */}
         <div role="region" aria-labelledby="members-h" tabIndex={0} className="overflow-x-auto rounded-xl border-2 border-divider bg-surface">
           <table className="w-full min-w-[36rem] border-collapse">
@@ -45,9 +44,8 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
               <tr>
                 <th scope="col" className={th}>{m.name}</th>
                 <th scope="col" className={th}>{m.email}</th>
-                <th scope="col" className={th}>{m.role}</th>
                 <th scope="col" className={th}>{m.joined}</th>
-                {isAdmin && <th scope="col" className={th}>{m.actions}</th>}
+                <th scope="col" className={th}>{m.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -57,25 +55,18 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
                     {mem.name} {mem.userId === user.id && <span className="font-normal text-muted">{t.common.you}</span>}
                   </th>
                   <td className={td}><span className="ltr-value">{mem.email}</span></td>
-                  <td className={td}>{t.roles[mem.role]}</td>
                   <td className={td}>{formatDate(locale, mem.joinedAt)}</td>
-                  {isAdmin && (
-                    <td className={td}>
-                      <div className="flex flex-wrap items-start gap-2">
-                        <ActionForm action={changeRoleAction}
-                          fields={{ groupId, userId: mem.userId, role: mem.role === "admin" ? "caregiver" : "admin" }}
-                          label={mem.role === "admin" ? m.makeCaregiver : m.makeAdmin}
-                          ariaLabel={`${mem.role === "admin" ? m.makeCaregiver : m.makeAdmin}: ${mem.name}`} pendingLabel={t.common.saving} />
-                        {mem.userId !== user.id && (
-                          <ConfirmDialog triggerLabel={m.remove} triggerAriaLabel={`${m.remove}: ${mem.name}`} cancelLabel={t.common.cancel}
-                            title={fmt(m.removeTitle, { name: mem.name })} body={m.removeBody}>
-                            <ActionForm action={removeMemberAction} fields={{ groupId, userId: mem.userId }}
-                              label={m.remove} pendingLabel={t.common.saving} variant="danger" />
-                          </ConfirmDialog>
-                        )}
-                      </div>
-                    </td>
-                  )}
+                  <td className={td}>
+                    <div className="flex flex-wrap items-start gap-2">
+                      {mem.userId !== user.id && (
+                        <ConfirmDialog triggerLabel={m.remove} triggerAriaLabel={`${m.remove}: ${mem.name}`} cancelLabel={t.common.cancel}
+                          title={fmt(m.removeTitle, { name: mem.name })} body={m.removeBody}>
+                          <ActionForm action={removeMemberAction} fields={{ groupId, userId: mem.userId }}
+                            label={m.remove} pendingLabel={t.common.saving} variant="danger" />
+                        </ConfirmDialog>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -83,58 +74,54 @@ export default async function MembersPage({ params }: { params: Promise<{ groupI
         </div>
       </section>
 
-      {isAdmin && (
-        <section aria-labelledby="inv-h" className="mt-10">
-          <h2 id="inv-h" className="text-2xl font-bold">{i.title}</h2>
-          <p className="mb-4 text-muted">{i.intro}</p>
-          <InviteForm t={t} groupId={groupId} petName={pet.name} />
+      <section aria-labelledby="inv-h" className="mt-10">
+        <h2 id="inv-h" className="text-2xl font-bold">{i.title}</h2>
+        <p className="mb-4 text-muted">{i.intro}</p>
+        <InviteForm t={t} groupId={groupId} petName={pet.name} />
 
-          <h3 id="active-h" className="mb-2 mt-8 text-xl font-bold">{i.active}</h3>
-          {invites.length === 0 ? (
-            <p className="text-muted">{i.none}</p>
-          ) : (
-            <div role="region" aria-labelledby="active-h" tabIndex={0} className="overflow-x-auto rounded-xl border-2 border-divider bg-surface">
-              <table className="w-full min-w-[36rem] border-collapse">
-                <caption className="sr-only">{i.active}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col" className={th}>{i.type}</th>
-                    <th scope="col" className={th}>{m.role}</th>
-                    <th scope="col" className={th}>{i.uses}</th>
-                    <th scope="col" className={th}>{i.expiresOn}</th>
-                    <th scope="col" className={th}>{m.actions}</th>
+        <h3 id="active-h" className="mb-2 mt-8 text-xl font-bold">{i.active}</h3>
+        {invites.length === 0 ? (
+          <p className="text-muted">{i.none}</p>
+        ) : (
+          <div role="region" aria-labelledby="active-h" tabIndex={0} className="overflow-x-auto rounded-xl border-2 border-divider bg-surface">
+            <table className="w-full min-w-[36rem] border-collapse">
+              <caption className="sr-only">{i.active}</caption>
+              <thead>
+                <tr>
+                  <th scope="col" className={th}>{i.type}</th>
+                  <th scope="col" className={th}>{i.uses}</th>
+                  <th scope="col" className={th}>{i.expiresOn}</th>
+                  <th scope="col" className={th}>{m.actions}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((inv, n) => (
+                  <tr key={inv.id}>
+                    <td className={td}>
+                      {inv.email ? fmt(i.emailType, { email: inv.email }) : inv.reusable ? i.reusableType : i.oneTime}
+                    </td>
+                    <td className={td}>{inv.useCount}</td>
+                    <td className={td}>{formatDate(locale, inv.expiresAt)}</td>
+                    <td className={td}>
+                      <div className="flex flex-wrap items-start gap-2">
+                      {links[n] ? (
+                        <InviteShare t={t} link={links[n]} petName={pet.name}
+                          context={`${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`} />
+                      ) : (
+                        <span className="self-center text-sm text-muted">{i.linkUnavailable}</span>
+                      )}
+                      <ActionForm action={revokeInviteAction} fields={{ groupId, invitationId: inv.id }}
+                        label={i.revoke} ariaLabel={`${i.revoke}: ${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`}
+                        pendingLabel={t.common.saving} variant="danger" />
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {invites.map((inv, n) => (
-                    <tr key={inv.id}>
-                      <td className={td}>
-                        {inv.email ? fmt(i.emailType, { email: inv.email }) : inv.reusable ? i.reusableType : i.oneTime}
-                      </td>
-                      <td className={td}>{t.roles[inv.role]}</td>
-                      <td className={td}>{inv.useCount}</td>
-                      <td className={td}>{formatDate(locale, inv.expiresAt)}</td>
-                      <td className={td}>
-                        <div className="flex flex-wrap items-start gap-2">
-                        {links[n] ? (
-                          <InviteShare t={t} link={links[n]} petName={pet.name}
-                            context={`${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`} />
-                        ) : (
-                          <span className="self-center text-sm text-muted">{i.linkUnavailable}</span>
-                        )}
-                        <ActionForm action={revokeInviteAction} fields={{ groupId, invitationId: inv.id }}
-                          label={i.revoke} ariaLabel={`${i.revoke}: ${inv.email ?? (inv.reusable ? i.reusableType : i.oneTime)}, ${formatDate(locale, inv.expiresAt)}`}
-                          pendingLabel={t.common.saving} variant="danger" />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }

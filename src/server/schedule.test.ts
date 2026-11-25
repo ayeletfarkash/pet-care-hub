@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMonthsClamped, isScheduledDose, medicationDoses, monthRange, nextOccurrence, nowLocal, occurrences, shiftMonth, stockStatus,
+  addMonthsClamped, isScheduledDose, medicationDoses, monthRange, monthWeeks, nextOccurrence, nowLocal, occurrences, shiftMonth, stockStatus,
   type MedicationSchedule,
 } from "./schedule";
 
@@ -74,6 +74,21 @@ describe("helpers", () => {
     expect(addMonthsClamped("2026-12-15", 1)).toBe("2027-01-15");
     expect(monthRange("2028-02")).toEqual({ from: "2028-02-01", to: "2028-02-29" });
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+  });
+});
+
+describe("monthWeeks", () => {
+  it("lays the month out in Sunday-first weeks padded with nulls", () => {
+    const w = monthWeeks("2026-11"); // starts on a Sunday, ends on a Monday
+    expect(w).toHaveLength(5);
+    expect(w[0][0]).toBe("2026-11-01");
+    expect(w[4]).toEqual(["2026-11-29", "2026-11-30", null, null, null, null, null]);
+    const aug = monthWeeks("2026-08"); // starts on a Saturday, needs six weeks
+    expect(aug).toHaveLength(6);
+    expect(aug[0]).toEqual([null, null, null, null, null, null, "2026-08-01"]);
+    expect(aug.flat().filter(Boolean)).toHaveLength(31);
+    expect(monthWeeks("2026-02")).toHaveLength(4);
+    expect(monthWeeks("9999-12").flat().filter(Boolean)).toHaveLength(31); // ends (the month comes from the URL)
   });
 });
 

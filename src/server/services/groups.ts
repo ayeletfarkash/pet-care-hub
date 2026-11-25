@@ -8,12 +8,12 @@ import type { PetInput } from "../validation";
 
 export const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Creates group + pet + creator's admin membership atomically (PRD §2.3). */
+/** Creates group + pet + creator's membership atomically (PRD §2.3). */
 export async function createGroupWithPet(userId: string, pet: PetInput) {
   return writeTx(async (tx) => {
     const [group] = await tx.insert(groups).values({}).returning({ id: groups.id });
     await tx.insert(pets).values({ ...pet, groupId: group.id });
-    await tx.insert(memberships).values({ groupId: group.id, userId, role: "admin" });
+    await tx.insert(memberships).values({ groupId: group.id, userId });
     await audit(tx, { groupId: group.id, actorId: userId, action: "group.created" });
     return group.id;
   });
@@ -21,7 +21,6 @@ export async function createGroupWithPet(userId: string, pet: PetInput) {
 
 const groupSummary = {
   groupId: groups.id,
-  role: memberships.role,
   petName: pets.name,
   species: pets.species,
   speciesOther: pets.speciesOther,
@@ -40,7 +39,7 @@ export function listUserGroups(userId: string) {
     .orderBy(asc(pets.name));
 }
 
-/** Soft-deleted groups still inside the recovery window where the user is an admin. */
+/** Soft-deleted groups still inside the recovery window that the user belongs to. */
 export function listRestorableGroups(userId: string) {
   return db
     .select(groupSummary)
@@ -50,7 +49,6 @@ export function listRestorableGroups(userId: string) {
     .where(
       and(
         eq(memberships.userId, userId),
-        eq(memberships.role, "admin"),
         isNotNull(groups.deletedAt),
         gt(groups.deletedAt, new Date(Date.now() - RESTORE_WINDOW_MS)),
       ),
@@ -59,7 +57,7 @@ export function listRestorableGroups(userId: string) {
 
 export async function deleteGroup(userId: string, groupId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await tx.update(groups).set({ deletedAt: new Date(), deletedById: userId }).where(eq(groups.id, groupId));
     await audit(tx, { groupId, actorId: userId, action: "group.deleted" });
   });
@@ -67,7 +65,7 @@ export async function deleteGroup(userId: string, groupId: string) {
 
 export async function restoreGroup(userId: string, groupId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin", { includeDeleted: true });
+    await requireMembership(tx, userId, groupId, { includeDeleted: true });
     const g = await tx.select({ deletedAt: groups.deletedAt }).from(groups).where(eq(groups.id, groupId)).get();
     if (!g?.deletedAt) return;
     if (g.deletedAt.getTime() < Date.now() - RESTORE_WINDOW_MS) throw new AppError("restore_expired");

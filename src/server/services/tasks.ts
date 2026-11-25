@@ -1,13 +1,13 @@
-import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import { dismissedAutoTasks, notifications, reminderRuleRecipients, reminderRules, taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { addMinutesLocal, nextOccurrence, nowLocal, type LocalDate } from "../schedule";
 import type { TaskInput } from "../validation";
 
-// PRD §10. Both roles: view, create (incl. initial assignees), start, complete, comment, request transfer.
-// Admins only: edit title/due/priority/recurrence/assignees, delete, approve/reject transfers.
+// PRD §10.
 // "cancelled" is no longer set (Phase 3 UI improvements); legacy cancelled rows stay readable.
 
 export type TaskRow = typeof tasks.$inferSelect;
@@ -34,28 +34,23 @@ async function assigneesOf(ex: Tx | typeof db, taskIds: string[]) {
 }
 
 export async function listTasks(userId: string, groupId: string, view: "open" | "done" = "open") {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const rows = await db.select().from(tasks).where(and(
     eq(tasks.groupId, groupId),
     view === "open" ? inArray(tasks.status, [...OPEN]) : eq(tasks.status, "completed"),
   )).orderBy(view === "open" ? asc(tasks.dueAt) : desc(tasks.updatedAt)).limit(view === "open" ? 500 : 100);
   const a = await assigneesOf(db, rows.map((t) => t.id));
-  const pending = rows.length
-    ? await db.select({ taskId: taskTransferRequests.taskId }).from(taskTransferRequests)
-        .where(and(eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"), inArray(taskTransferRequests.taskId, rows.map((t) => t.id))))
-    : [];
-  const pendingSet = new Set(pending.map((p) => p.taskId));
   const now = nowLocal();
   // Undated open tasks after dated ones.
   const sorted = view === "open" ? [...rows].sort((x, y) => (x.dueAt ?? "9999").localeCompare(y.dueAt ?? "9999")) : rows;
-  return { role, tasks: sorted.map((t) => ({ ...t, assignees: a.get(t.id) ?? [], overdue: isOverdue(t, now), transferPending: pendingSet.has(t.id) })) };
+  return { tasks: sorted.map((t) => ({ ...t, assignees: a.get(t.id) ?? [], overdue: isOverdue(t, now) })) };
 }
 
 export async function getTask(userId: string, groupId: string, taskId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const t = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.groupId, groupId))).get();
   if (!t) throw new AppError("not_found");
-  const [a, comments, hist, transfer] = await Promise.all([
+  const [a, comments, hist] = await Promise.all([
     assigneesOf(db, [taskId]),
     db.select({ id: taskComments.id, body: taskComments.body, createdAt: taskComments.createdAt, name: users.name })
       .from(taskComments).leftJoin(users, eq(users.id, taskComments.userId))
@@ -63,10 +58,8 @@ export async function getTask(userId: string, groupId: string, taskId: string) {
     db.select({ id: taskHistory.id, action: taskHistory.action, meta: taskHistory.meta, createdAt: taskHistory.createdAt, name: users.name })
       .from(taskHistory).leftJoin(users, eq(users.id, taskHistory.actorId))
       .where(and(eq(taskHistory.taskId, taskId), eq(taskHistory.groupId, groupId))).orderBy(desc(taskHistory.createdAt), desc(sql`"task_history"."rowid"`)),
-    db.select().from(taskTransferRequests)
-      .where(and(eq(taskTransferRequests.taskId, taskId), eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"))).get(),
   ]);
-  return { task: { ...t, overdue: isOverdue(t) }, assignees: a.get(taskId) ?? [], comments, history: hist, transfer: transfer ?? null, role };
+  return { task: { ...t, overdue: isOverdue(t) }, assignees: a.get(taskId) ?? [], comments, history: hist };
 }
 
 export async function createTask(userId: string, groupId: string, input: TaskInput) {
@@ -85,7 +78,7 @@ export async function createTask(userId: string, groupId: string, input: TaskInp
 
 export async function updateTask(userId: string, groupId: string, taskId: string, input: TaskInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, input.assignees);
     const t = await loadTask(tx, groupId, taskId);
     if (!isOpen(t)) throw new AppError("task_closed");
@@ -124,7 +117,7 @@ async function copyReminder(tx: Tx, groupId: string, fromId: string, toId: strin
   if (users.length) await tx.insert(reminderRuleRecipients).values(users.map((u) => ({ ruleId: copy.id, userId: u.userId, groupId })));
 }
 
-/** Complete (both roles). A recurring task spawns its next instance from the due date, at most once. */
+/** Complete. A recurring task spawns its next instance from the due date, at most once. */
 export async function completeTask(userId: string, groupId: string, taskId: string) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);
@@ -150,7 +143,7 @@ export async function completeTask(userId: string, groupId: string, taskId: stri
 }
 
 /**
- * Undo a mistaken completion (both roles, like completing). A recurring task's next instance,
+ * Undo a mistaken completion. A recurring task's next instance,
  * already created, stays; reopening doesn't create or delete instances.
  */
 export async function reopenTask(userId: string, groupId: string, taskId: string) {
@@ -164,14 +157,14 @@ export async function reopenTask(userId: string, groupId: string, taskId: string
 }
 
 /**
- * Permanent delete (Admins). Dependents are removed explicitly in the same transaction: assignees,
+ * Permanent delete. Dependents are removed explicitly in the same transaction: assignees,
  * comments, history, transfer requests, its reminder rule and its notifications (polymorphic, no FK).
  * Other instances of a recurring series stay; deleting the open instance ends the series.
  * A deleted automatic task is remembered so the generator doesn't create it again.
  */
 export async function deleteTask(userId: string, groupId: string, taskId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const t = await loadTask(tx, groupId, taskId);
     const rules = await tx.select({ id: reminderRules.id }).from(reminderRules)
       .where(and(eq(reminderRules.groupId, groupId), eq(reminderRules.sourceType, "task"), eq(reminderRules.sourceId, taskId)));
@@ -181,6 +174,7 @@ export async function deleteTask(userId: string, groupId: string, taskId: string
     for (const child of [taskAssignees, taskComments, taskHistory, taskTransferRequests]) await tx.delete(child).where(eq(child.taskId, taskId));
     if (t.sourceKey) await tx.insert(dismissedAutoTasks).values({ groupId, sourceKey: t.sourceKey }).onConflictDoNothing();
     await tx.delete(tasks).where(eq(tasks.id, taskId));
+    await audit(tx, { groupId, actorId: userId, action: "task.deleted", meta: { id: t.id, title: t.title, dueAt: t.dueAt, status: t.status } });
   });
 }
 
@@ -193,57 +187,23 @@ export async function addComment(userId: string, groupId: string, taskId: string
 }
 
 /**
- * Responsibility transfer (PRD §10.4). Admins reassign directly; a Caregiver's request waits for an
- * Admin. `fromUserId` is the requester when they are an assignee, else null (just adds a person).
+ * Responsibility transfer (PRD §10.4), applied at once. The person handing over stops being an
+ * assignee; someone who isn't one just adds a person.
  */
-export async function requestTransfer(userId: string, groupId: string, taskId: string, toUserId: string) {
-  try {
-    return await writeTx(async (tx) => {
-      const role = await requireMembership(tx, userId, groupId);
-      await requireMembersOf(tx, groupId, [toUserId]);
-      const t = await loadTask(tx, groupId, taskId);
-      if (!isOpen(t)) throw new AppError("task_closed");
-      const mine = await tx.select().from(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId))).get();
-      const fromUserId = mine ? userId : null;
-      if (role === "admin") {
-        await applyTransfer(tx, groupId, taskId, fromUserId, toUserId);
-        await history(tx, groupId, taskId, userId, "transfer_approved", { to: toUserId });
-        return "applied" as const;
-      }
-      await tx.insert(taskTransferRequests).values({ groupId, taskId, fromUserId, toUserId, requestedById: userId });
-      await history(tx, groupId, taskId, userId, "transfer_requested", { to: toUserId });
-      return "requested" as const;
-    });
-  } catch (e) {
-    if (isUniqueViolation(e)) throw new AppError("transfer_pending");
-    throw e;
-  }
-}
-
-async function applyTransfer(tx: Tx, groupId: string, taskId: string, fromUserId: string | null, toUserId: string) {
-  if (fromUserId) await tx.delete(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, fromUserId)));
-  await tx.insert(taskAssignees).values({ taskId, userId: toUserId, groupId }).onConflictDoNothing();
-}
-
-export async function decideTransfer(userId: string, groupId: string, taskId: string, approve: boolean) {
+export async function transferTask(userId: string, groupId: string, taskId: string, toUserId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
-    const r = await tx.select().from(taskTransferRequests)
-      .where(and(eq(taskTransferRequests.taskId, taskId), eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"))).get();
-    if (!r) throw new AppError("not_found");
+    await requireMembership(tx, userId, groupId);
+    await requireMembersOf(tx, groupId, [toUserId]);
     const t = await loadTask(tx, groupId, taskId);
-    if (approve) {
-      if (!isOpen(t)) throw new AppError("task_closed");
-      await requireMembersOf(tx, groupId, [r.toUserId]); // target may have left since the request
-      await applyTransfer(tx, groupId, taskId, r.fromUserId, r.toUserId);
-    }
-    await tx.update(taskTransferRequests).set({ status: approve ? "approved" : "rejected", decidedById: userId, decidedAt: new Date() }).where(eq(taskTransferRequests.id, r.id));
-    await history(tx, groupId, taskId, userId, approve ? "transfer_approved" : "transfer_rejected", { to: r.toUserId });
+    if (!isOpen(t)) throw new AppError("task_closed");
+    await tx.delete(taskAssignees).where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId)));
+    await tx.insert(taskAssignees).values({ taskId, userId: toUserId, groupId }).onConflictDoNothing();
+    await history(tx, groupId, taskId, userId, "transfer_approved", { to: toUserId });
   });
 }
 
 /** Open tasks in the given groups (dashboard). Caller must already have checked membership. */
-export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?: string; dueBefore?: LocalDate } = {}) {
+export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?: string } = {}) {
   if (groupIds.length === 0) return [];
   let ids: string[] | undefined;
   if (opts.assignedTo) {
@@ -255,15 +215,20 @@ export async function openTasksForGroups(groupIds: string[], opts: { assignedTo?
     inArray(tasks.groupId, groupIds),
     inArray(tasks.status, [...OPEN]),
     ids ? inArray(tasks.id, ids) : undefined,
-    opts.dueBefore ? and(isNotNull(tasks.dueAt), lte(tasks.dueAt, `${opts.dueBefore}T23:59`)) : undefined,
   )).orderBy(asc(tasks.dueAt)).limit(200);
   const now = nowLocal();
   return rows.map((t) => ({ ...t, overdue: isOverdue(t, now) }));
 }
 
-/** Pending transfer requests an Admin should decide on. */
-export async function pendingTransfers(groupIds: string[]) {
-  if (groupIds.length === 0) return [];
-  return db.select({ taskId: taskTransferRequests.taskId, groupId: taskTransferRequests.groupId }).from(taskTransferRequests)
-    .where(and(inArray(taskTransferRequests.groupId, groupIds), eq(taskTransferRequests.status, "pending")));
+/** Open and completed tasks due in [from, to], for the calendar (completed ones stay visible so they can be reopened). */
+export async function groupTasksDue(userId: string, groupId: string, from: LocalDate, to: LocalDate) {
+  await requireMembership(db, userId, groupId);
+  const rows = await db.select().from(tasks).where(and(
+    eq(tasks.groupId, groupId),
+    inArray(tasks.status, [...OPEN, "completed"]),
+    gte(tasks.dueAt, `${from}T00:00`),
+    lte(tasks.dueAt, `${to}T23:59`),
+  )).orderBy(asc(tasks.dueAt));
+  const now = nowLocal();
+  return rows.map((t) => ({ ...t, overdue: isOverdue(t, now) }));
 }

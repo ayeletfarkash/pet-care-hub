@@ -10,10 +10,10 @@ import { Badge, taskTone } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
-import { TaskCheckbox } from "@/components/forms/task-checkbox";
+import { CompletionCheckbox } from "@/components/forms/completion-checkbox";
 import { TrashIcon } from "@/components/ui/icons";
 import { CommentForm, TransferForm } from "@/components/forms/care-forms";
-import { commentAction, decideTransferAction, deleteTaskAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
+import { commentAction, deleteTaskAction, taskStatusAction, transferAction } from "@/app/actions/tasks";
 import { dueText } from "../due";
 import { loadGroup } from "../../load";
 import { ReminderSection } from "@/components/reminder-section";
@@ -21,11 +21,10 @@ import { ReminderSection } from "@/components/reminder-section";
 export default async function TaskPage({ params, searchParams }: { params: Promise<{ groupId: string; taskId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, taskId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { task: x, assignees, comments, history, transfer, role } = await getTask(user.id, groupId, taskId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
+  const { task: x, assignees, comments, history } = await getTask(user.id, groupId, taskId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
   const members = await listMembers(user.id, groupId);
-  const k = t.tasks, isAdmin = role === "admin";
+  const k = t.tasks;
   const open = x.status === "new" || x.status === "in_progress";
-  const name = (id: string | null) => members.find((m) => m.userId === id)?.name ?? t.ui.formerMember;
   const hidden = { groupId, taskId };
   return (
     <div className="mx-auto max-w-3xl">
@@ -42,12 +41,10 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && open && <LinkButton variant="secondary" href={`/groups/${groupId}/tasks/${taskId}/edit`}>{t.ui.edit}</LinkButton>}
-          {isAdmin && (
-            <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
-              <ActionForm action={deleteTaskAction} fields={hidden} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
-            </ConfirmDialog>
-          )}
+          {open && <LinkButton variant="secondary" href={`/groups/${groupId}/tasks/${taskId}/edit`}>{t.ui.edit}</LinkButton>}
+          <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
+            <ActionForm action={deleteTaskAction} fields={hidden} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
+          </ConfirmDialog>
         </div>
       </div>
 
@@ -59,7 +56,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
 
       {(open || x.status === "completed") && (
         <div className="mb-8 flex flex-wrap items-center gap-4">
-          <TaskCheckbox groupId={groupId} taskId={taskId} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
+          <CompletionCheckbox action={taskStatusAction} on={{ ...hidden, op: "complete" }} off={{ ...hidden, op: "reopen" }} completed={x.status === "completed"} label={k.complete} visibleLabel={k.complete} />
           {x.status === "new" && <ActionForm action={taskStatusAction} fields={{ ...hidden, op: "start" }} label={k.start} pendingLabel={t.common.saving} />}
         </div>
       )}
@@ -67,19 +64,7 @@ export default async function TaskPage({ params, searchParams }: { params: Promi
       {open && (
         <section aria-labelledby="transfer-h" className="card mb-8 rounded-xl border-2 border-divider bg-surface p-5">
           <h2 id="transfer-h" className="mb-3 text-xl font-bold">{k.transfer}</h2>
-          {transfer ? (
-            <>
-              <p className="mb-3">{fmt(k.transferPending, { name: name(transfer.toUserId) })}</p>
-              {isAdmin && (
-                <div className="flex flex-wrap gap-2">
-                  <ActionForm action={decideTransferAction} fields={{ ...hidden, decision: "approve" }} label={k.approve} pendingLabel={t.common.saving} variant="primary" />
-                  <ActionForm action={decideTransferAction} fields={{ ...hidden, decision: "reject" }} label={k.reject} pendingLabel={t.common.saving} variant="danger" />
-                </div>
-              )}
-            </>
-          ) : (
-            <TransferForm t={t} action={transferAction} hidden={hidden} isAdmin={isAdmin} members={members.filter((m) => !assignees.some((a) => a.userId === m.userId))} />
-          )}
+          <TransferForm t={t} action={transferAction} hidden={hidden} members={members.filter((m) => !assignees.some((a) => a.userId === m.userId))} />
         </section>
       )}
 

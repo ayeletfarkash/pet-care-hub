@@ -13,7 +13,7 @@ export async function generateMetadata() {
 
 export default async function InventoryPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId } = await params;
-  const [{ user, role, pet }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
+  const [{ user, pet }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
   const { items } = await listItems(user.id, groupId);
   const k = t.inventory;
   // Items to reorder first, then by name (already sorted by name).
@@ -21,7 +21,7 @@ export default async function InventoryPage({ params, searchParams }: { params: 
   return (
     <>
       <Notice t={t} notice={sp.notice} />
-      <SectionHeader as="h1" id="inv-h" title={k.title} action={role === "admin" ? { href: `/groups/${groupId}/inventory/new`, label: k.add } : undefined} />
+      <SectionHeader as="h1" id="inv-h" title={k.title} action={{ href: `/groups/${groupId}/inventory/new`, label: k.add }} />
       <p className="mb-6 text-muted">{fmt(k.intro, { pet: pet.name })}</p>
       {sorted.length === 0 ? <Empty>{k.empty}</Empty> : (
         <ul className="grid gap-3 sm:grid-cols-2">

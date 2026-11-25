@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { medicationAdministrations, medicationPlans, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { addDays, isScheduledDose, medicationDoses, nowLocal, todayLocal, type LocalDate } from "../schedule";
@@ -11,10 +12,9 @@ import type { MedicationPlanInput } from "../validation";
 
 export type Plan = typeof medicationPlans.$inferSelect;
 export const EARLY_DOSE_MINUTES = 60; // a dose may be confirmed up to an hour before its time
-export const CAREGIVER_BACKFILL_HOURS = 48; // older doses can only be recorded by an Admin
 
 export async function listPlans(userId: string, groupId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const plans = await db
     .select({ p: medicationPlans, responsibleName: users.name })
     .from(medicationPlans)
@@ -22,19 +22,19 @@ export async function listPlans(userId: string, groupId: string) {
     .where(eq(medicationPlans.groupId, groupId))
     .orderBy(asc(medicationPlans.name));
   const today = todayLocal();
-  return { role, plans: plans.map(({ p, responsibleName }) => ({ ...p, responsibleName, active: !p.endDate || p.endDate >= today })) };
+  return { plans: plans.map(({ p, responsibleName }) => ({ ...p, responsibleName, active: !p.endDate || p.endDate >= today })) };
 }
 
 export async function getPlan(userId: string, groupId: string, planId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const plan = await db.select().from(medicationPlans).where(and(eq(medicationPlans.id, planId), eq(medicationPlans.groupId, groupId))).get();
   if (!plan) throw new AppError("not_found");
-  return { plan, role };
+  return { plan };
 }
 
 export async function createPlan(userId: string, groupId: string, input: MedicationPlanInput) {
   return writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, [input.responsibleUserId]);
     const [p] = await tx.insert(medicationPlans).values({ ...input, groupId, createdById: userId }).returning({ id: medicationPlans.id });
     return p.id;
@@ -43,7 +43,7 @@ export async function createPlan(userId: string, groupId: string, input: Medicat
 
 export async function updatePlan(userId: string, groupId: string, planId: string, input: MedicationPlanInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, [input.responsibleUserId]);
     const res = await tx.update(medicationPlans).set({ ...input, updatedAt: new Date() })
       .where(and(eq(medicationPlans.id, planId), eq(medicationPlans.groupId, groupId)));
@@ -54,7 +54,7 @@ export async function updatePlan(userId: string, groupId: string, planId: string
 /** Stop a plan from today on, keeping its history. */
 export async function endPlan(userId: string, groupId: string, planId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const p = await tx.select().from(medicationPlans).where(and(eq(medicationPlans.id, planId), eq(medicationPlans.groupId, groupId))).get();
     if (!p) throw new AppError("not_found");
     const today = todayLocal();
@@ -65,7 +65,7 @@ export async function endPlan(userId: string, groupId: string, planId: string) {
 /** Only plans without recorded doses can be deleted (the administration history must stay complete). */
 export async function deletePlan(userId: string, groupId: string, planId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const used = await tx.select({ id: medicationAdministrations.id }).from(medicationAdministrations)
       .where(and(eq(medicationAdministrations.planId, planId), eq(medicationAdministrations.groupId, groupId))).limit(1).get();
     if (used) throw new AppError("has_history");
@@ -123,16 +123,15 @@ export async function groupDoses(userId: string, groupId: string, from: LocalDat
   return dosesForGroups([groupId], from, to);
 }
 
-/** Mark a scheduled dose as given (both roles). Rejects invented, future and duplicate doses. */
+/** Mark a scheduled dose as given. Rejects invented, future and duplicate doses. */
 export async function recordAdministration(userId: string, groupId: string, planId: string, scheduledFor: string, notes?: string | null) {
   try {
     await writeTx(async (tx) => {
-      const role = await requireMembership(tx, userId, groupId);
+      await requireMembership(tx, userId, groupId);
       const p = await tx.select().from(medicationPlans).where(and(eq(medicationPlans.id, planId), eq(medicationPlans.groupId, groupId))).get();
       if (!p) throw new AppError("not_found");
       const latest = nowLocal(new Date(Date.now() + EARLY_DOSE_MINUTES * 60_000));
-      const earliest = role === "admin" ? "" : nowLocal(new Date(Date.now() - CAREGIVER_BACKFILL_HOURS * 3_600_000));
-      if (!isScheduledDose(p, scheduledFor) || scheduledFor > latest || scheduledFor < earliest) throw new AppError("invalid_dose");
+      if (!isScheduledDose(p, scheduledFor) || scheduledFor > latest) throw new AppError("invalid_dose");
       await tx.insert(medicationAdministrations).values({
         groupId, planId, scheduledFor, administeredAt: nowLocal(), administeredById: userId, notes: notes ?? null,
       });
@@ -143,13 +142,17 @@ export async function recordAdministration(userId: string, groupId: string, plan
   }
 }
 
-/** Correct a mistaken confirmation (Admins only, like editing any record). */
+/** Correct a mistaken confirmation. */
 export async function removeAdministration(userId: string, groupId: string, administrationId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
-    const res = await tx.delete(medicationAdministrations)
-      .where(and(eq(medicationAdministrations.id, administrationId), eq(medicationAdministrations.groupId, groupId)));
-    if (res.rowsAffected === 0) throw new AppError("not_found");
+    await requireMembership(tx, userId, groupId);
+    const [a] = await tx.delete(medicationAdministrations)
+      .where(and(eq(medicationAdministrations.id, administrationId), eq(medicationAdministrations.groupId, groupId))).returning();
+    if (!a) throw new AppError("not_found");
+    await audit(tx, {
+      groupId, actorId: userId, action: "dose.deleted",
+      meta: { id: a.id, planId: a.planId, scheduledFor: a.scheduledFor, administeredAt: a.administeredAt, administeredById: a.administeredById },
+    });
   });
 }
 

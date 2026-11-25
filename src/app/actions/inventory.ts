@@ -37,7 +37,7 @@ export async function deleteItemAction(_: FormState, fd: FormData): Promise<Form
   });
 }
 
-/** Both roles: consumption, purchase, counted quantity, depleted. */
+/** Consumption, purchase, counted quantity, depleted. */
 export async function changeStockAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId"), itemId = str(fd, "itemId");

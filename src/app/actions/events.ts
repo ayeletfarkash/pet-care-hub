@@ -37,7 +37,7 @@ export async function deleteEventAction(_: FormState, fd: FormData): Promise<For
   });
 }
 
-/** status: "completed" | "cancelled" | "" (clear). Both roles. */
+/** status: "completed" | "cancelled" | "" (clear). */
 export async function occurrenceStatusAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");

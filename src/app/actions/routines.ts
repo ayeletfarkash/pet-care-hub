@@ -46,7 +46,7 @@ export async function deleteRoutineAction(_: FormState, fd: FormData): Promise<F
   });
 }
 
-/** Both roles: completed / missed for a scheduled activity, or an extra activity. */
+/** Completed / missed for a scheduled activity, or an extra activity. */
 export async function logActivityAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");

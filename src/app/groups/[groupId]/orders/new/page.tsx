@@ -11,7 +11,7 @@ export async function generateMetadata() {
   return { title: t.orders.createTitle };
 }
 
-/** Both roles can add orders (PRD §9.4). `?item=` preselects the inventory product. */
+/** `?item=` preselects the inventory product. */
 export default async function NewOrderPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<{ item?: string }> }) {
   const { groupId } = await params;
   const [{ user }, { t }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);

@@ -22,7 +22,7 @@ npm 11 blocks dependency install scripts by default. esbuild's postinstall is bl
 | `ACCESSIBILITY_CONTACT_EMAIL` | empty | shown on the accessibility statement |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | empty | Web Push keys (`npx web-push generate-vapid-keys`); without them push is off and the inbox is the only channel. Private key is a secret |
 | `VAPID_SUBJECT` | `mailto:admin@localhost` | contact sent to push services; set a real `mailto:` in production |
-| `INVITE_LINK_SECRET` | dev-only fallback | **required in production**; encrypts stored invitation tokens so admins can copy/share active links. Changing it makes existing links un-shareable (they still work) |
+| `INVITE_LINK_SECRET` | dev-only fallback | **required in production**; encrypts stored invitation tokens so members can copy/share active links. Changing it makes existing links un-shareable (they still work) |
 | `DISABLE_JOBS` | empty | `1` stops the in-process reminder timer |
 
 ## Scripts

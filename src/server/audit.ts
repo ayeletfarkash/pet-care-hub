@@ -4,9 +4,10 @@ import { auditLogs } from "./db/schema";
 export type AuditAction =
   | "group.created" | "group.deleted" | "group.restored" | "pet.updated"
   | "member.joined" | "member.removed" | "member.left" | "member.role_changed"
-  | "invitation.created" | "invitation.revoked";
+  | "invitation.created" | "invitation.revoked"
+  | "dose.deleted" | "routine_log.deleted" | "task.deleted" | "event.deleted";
 
-/** Never put tokens or secrets in `meta`. */
+/** Never put tokens or secrets in `meta`; for deletions, only what identifies the record (no notes or descriptions). */
 export function audit(
   ex: Executor,
   e: { groupId: string; actorId: string; action: AuditAction; targetUserId?: string; meta?: object },

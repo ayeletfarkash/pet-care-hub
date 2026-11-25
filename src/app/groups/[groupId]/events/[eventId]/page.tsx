@@ -6,10 +6,11 @@ import { fmt, formatDate, formatLocalDateTime } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { BackLink } from "@/components/back-link";
 import { Notice } from "@/components/notice";
-import { Badge } from "@/components/care";
+import { Badge, rowBodyClass, rowClass } from "@/components/care";
 import { LinkButton } from "@/components/ui/buttons";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionForm } from "@/components/forms/action-form";
+import { CompletionCheckbox, NoCheckbox } from "@/components/forms/completion-checkbox";
 import { deleteEventAction, occurrenceStatusAction } from "@/app/actions/events";
 import { loadGroup } from "../../load";
 import { ReminderSection } from "@/components/reminder-section";
@@ -17,8 +18,8 @@ import { ReminderSection } from "@/components/reminder-section";
 export default async function EventPage({ params, searchParams }: { params: Promise<{ groupId: string; eventId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, eventId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { event: e, assigneeName, statuses, role } = await getEvent(user.id, groupId, eventId).catch((x) => { if (x instanceof AppError) notFound(); throw x; });
-  const ev = t.events, isAdmin = role === "admin";
+  const { event: e, assigneeName, statuses } = await getEvent(user.id, groupId, eventId).catch((x) => { if (x instanceof AppError) notFound(); throw x; });
+  const ev = t.events;
   const today = todayLocal();
   // The next few occurrences (from today, up to a year ahead), with their status.
   const next = occurrences(e.startsAt, e.recurrence, e.recurrenceUntil, today, addDays(today, 366), 6);
@@ -34,7 +35,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <h1 className="text-3xl font-bold">{e.title}</h1>
           <p className="mt-1 flex flex-wrap gap-2"><Badge>{ev.types[e.type]}</Badge><Badge>{ev.recurrences[e.recurrence]}</Badge></p>
         </div>
-        {isAdmin && <LinkButton variant="secondary" href={`/groups/${groupId}/events/${eventId}/edit`}>{t.ui.edit}</LinkButton>}
+        <LinkButton variant="secondary" href={`/groups/${groupId}/events/${eventId}/edit`}>{t.ui.edit}</LinkButton>
       </div>
       <dl className="card mb-6 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
         {row(ev.date, when(e.startsAt))}
@@ -55,18 +56,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               const fields = { groupId, eventId, occurrence: at };
               const label = { title: e.title, date: when(at) };
               return (
-                <li key={at} className="card flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-divider bg-surface p-3">
-                  <span className="font-semibold">{when(at)} {s && <Badge tone={s === "completed" ? "success" : "danger"}>{ev.statusLabel[s]}</Badge>}</span>
-                  <div className="flex flex-wrap gap-2">
-                    {!s ? (
-                      <>
-                        <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "completed" }} label={ev.complete} ariaLabel={fmt(ev.completeLabel, label)} pendingLabel={t.common.saving} />
-                        <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "cancelled" }} label={ev.cancel} ariaLabel={fmt(ev.cancelLabel, label)} pendingLabel={t.common.saving} variant="ghost" />
-                      </>
-                    ) : (
-                      <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "" }} label={ev.reopen} ariaLabel={fmt(ev.reopenLabel, label)} pendingLabel={t.common.saving} variant="ghost" />
-                    )}
-                  </div>
+                <li key={at} className={rowClass}>
+                  {s === "cancelled" ? <NoCheckbox /> : (
+                    <CompletionCheckbox action={occurrenceStatusAction} on={{ ...fields, status: "completed" }} off={{ ...fields, status: "" }}
+                      completed={s === "completed"} label={fmt(ev.completeLabel, label)} />
+                  )}
+                  <span className={`${rowBodyClass} font-semibold`}>{when(at)} {s && <Badge tone={s === "completed" ? "success" : "danger"}>{ev.statusLabel[s]}</Badge>}</span>
+                  {!s && <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "cancelled" }} label={ev.cancel} ariaLabel={fmt(ev.cancelLabel, label)} pendingLabel={t.common.saving} variant="ghost" />}
+                  {s === "cancelled" && <ActionForm action={occurrenceStatusAction} fields={{ ...fields, status: "" }} label={ev.reopen} ariaLabel={fmt(ev.reopenLabel, label)} pendingLabel={t.common.saving} variant="ghost" />}
                 </li>
               );
             })}
@@ -76,11 +73,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {next.length > 0 && <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="event" sourceId={eventId} />}
 
-      {isAdmin && (
-        <ConfirmDialog triggerLabel={ev.deleteEvent} cancelLabel={t.common.cancel} title={fmt(ev.deleteTitle, { title: e.title })} body={ev.deleteBody}>
-          <ActionForm action={deleteEventAction} fields={{ groupId, eventId }} label={ev.deleteEvent} pendingLabel={t.common.saving} variant="danger" />
-        </ConfirmDialog>
-      )}
+      <ConfirmDialog triggerLabel={ev.deleteEvent} cancelLabel={t.common.cancel} title={fmt(ev.deleteTitle, { title: e.title })} body={ev.deleteBody}>
+        <ActionForm action={deleteEventAction} fields={{ groupId, eventId }} label={ev.deleteEvent} pendingLabel={t.common.saving} variant="danger" />
+      </ConfirmDialog>
     </div>
   );
 }

@@ -18,6 +18,13 @@
   --success: #166534;
   --success-bg: #f0fdf4;
   --focus: #1d4ed8;
+  /* Calendar item kinds: text ≥ 7:1 on its tint. */
+  --cal-event-bg: #ffe4c7;
+  --cal-event: #7c2d12;
+  --cal-task-bg: #e5e9fb;
+  --cal-task: #312e81;
+  --cal-dose-bg: #dcf0e1;
+  --cal-dose: #14532d;
   --radius: 0.75rem;
 }
 
@@ -38,6 +45,12 @@ html.contrast-high {
   --success: #7dff9a;
   --success-bg: #000000;
   --focus: #00ffff;
+  --cal-event-bg: #000000;
+  --cal-event: #ffffff;
+  --cal-task-bg: #000000;
+  --cal-task: #ffff00;
+  --cal-dose-bg: #000000;
+  --cal-dose: #7dff9a;
 }
 
 @theme inline {
@@ -104,6 +117,10 @@ html.contrast-high .card, html.contrast-high input, html.contrast-high select, h
 html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
   animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
 }
+
+.cal-event { background: var(--cal-event-bg); color: var(--cal-event); }
+.cal-task { background: var(--cal-task-bg); color: var(--cal-task); }
+.cal-dose { background: var(--cal-dose-bg); color: var(--cal-dose); }
 
 /* No sticky header on purpose, so nothing can cover the focused element (WCAG 2.4.11). */
 
