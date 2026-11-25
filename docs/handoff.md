@@ -3,10 +3,8 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–4 merged into `dev` (not pushed).
+- Phases 1–4, the calendar/completion UI and the removal of roles are merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Calendar/routine completion (UI improvements phase 4) is on `feature/phase4-calendar`, not merged.
-- Roles are removed on `feature/remove-roles` (includes the calendar branch), not merged.
 - Tests: 95 Vitest + 28 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-25.
 - Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
