@@ -1,15 +1,19 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { makeGroup, makeUser } from "../../test/factories";
+import { db } from "../db";
+import { auditLogs } from "../db/schema";
 import { resetRateLimits } from "../rate-limit";
 import { addDays, todayLocal } from "../schedule";
-import { eventSchema, medicalRecordSchema, medicationPlanSchema, taskSchema } from "../validation";
+import { eventSchema, medicalRecordSchema, medicationPlanSchema, routineSchema, taskSchema } from "../validation";
 import { acceptInvitation, createInvitation } from "./invitations";
 import { removeMember } from "./members";
 import { addAttachments, createMedicalRecord, deleteMedicalRecord, getMedicalRecord, listMedicalRecords, readAttachment, updateMedicalRecord } from "./medical";
-import { createPlan, deletePlan, endPlan, getPlan, groupDoses, recordAdministration, removeAdministration } from "./medications";
+import { administrationHistory, createPlan, deletePlan, endPlan, getPlan, groupDoses, recordAdministration, removeAdministration } from "./medications";
 import { createEvent, deleteEvent, groupOccurrences, setOccurrenceStatus, updateEvent } from "./events";
+import { createRoutine, logActivity, removeLog, routineHistory } from "./routines";
 import { completeTask, createTask, deleteTask, getTask, groupTasksDue, listTasks, reopenTask, transferTask, updateTask } from "./tasks";
 
 const code = async (p: Promise<unknown>) => {
@@ -242,5 +246,35 @@ describe("tasks", () => {
     expect((await getTask(s.admin, s.g, t)).assignees).toEqual([]);
     expect((await getPlan(s.admin, s.g, p)).plan.responsibleUserId).toBeNull();
     expect((await getTask(s.admin, s.g, t)).history.length).toBeGreaterThan(0); // history kept
+  });
+});
+
+describe("deletion audit", () => {
+  it("records who deleted a dose, routine log, task or event; refused deletions leave no row", async () => {
+    const s = await setup();
+    const plan = await createPlan(s.admin, s.g, medicationPlanSchema.parse({ name: "M", dosage: "1", scheduleType: "daily", times: ["00:00"], startDate: addDays(today(), -1) }));
+    const at = `${addDays(today(), -1)}T00:00`;
+    await recordAdministration(s.admin, s.g, plan, at, "private note");
+    const [dose] = await administrationHistory(s.admin, s.g, plan);
+    const routine = await createRoutine(s.admin, s.g, routineSchema.parse({ name: "Walk", scheduleType: "daily", times: ["00:00"], startDate: today() }));
+    await logActivity(s.admin, s.g, { routineId: routine, status: "completed", notes: "private note" });
+    const [log] = await routineHistory(s.admin, s.g, routine);
+    const task = await createTask(s.admin, s.g, taskSchema.parse({ title: "Buy food", description: "private note" }));
+    const event = await createEvent(s.admin, s.g, eventSchema.parse({ type: "vet", title: "Checkup", date: today(), time: "10:00", notes: "private note" }));
+
+    const all = (user: string, g: string) => [removeAdministration(user, g, dose.id), removeLog(user, g, log.id), deleteTask(user, g, task), deleteEvent(user, g, event)].map(code);
+    const rows = async (g: string) => (await db.select().from(auditLogs).where(eq(auditLogs.groupId, g))).filter((r) => r.action.endsWith(".deleted"));
+    expect(await Promise.all([...all(s.out, s.g), ...all(s.out, s.gOut)])).toEqual(Array(8).fill("not_found"));
+    expect([...(await rows(s.g)), ...(await rows(s.gOut))]).toEqual([]);
+
+    expect(await Promise.all(all(s.care, s.g))).toEqual(Array(4).fill("ok"));
+    const logged = await rows(s.g);
+    expect(logged.map((r) => r.action).sort()).toEqual(["dose.deleted", "event.deleted", "routine_log.deleted", "task.deleted"]);
+    expect(logged.every((r) => r.actorId === s.care && !r.meta!.includes("private note"))).toBe(true);
+    const meta = (action: string) => JSON.parse(logged.find((r) => r.action === action)!.meta!);
+    expect(meta("dose.deleted")).toMatchObject({ planId: plan, scheduledFor: at, administeredById: s.admin });
+    expect(meta("routine_log.deleted")).toMatchObject({ routineId: routine, byUserId: s.admin });
+    expect(meta("task.deleted")).toMatchObject({ id: task, title: "Buy food" });
+    expect(meta("event.deleted")).toMatchObject({ id: event, title: "Checkup" });
   });
 });

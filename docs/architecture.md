@@ -40,7 +40,7 @@ Rule: **UI → actions → services → db**. Services have no Next.js imports, 
 - `memberships` (unique `(group_id, user_id)`, `role` column unused since 2026-11-25)
 - `invitations` (token hash, unused `role`, optional bound email, reusable flag, use count, expiry, revoked_at)
 - `accessibility_preferences` (per user)
-- `audit_logs` (group-scoped; invites, joins, removals, pet edits; never stores tokens)
+- `audit_logs` (group-scoped; invites, joins, removals, pet edits, and deletions of doses, routine logs, tasks and events; never stores tokens)
 
 ## Authorization
 - Every group-scoped service call starts with `requireMembership(executor, userId, groupId)`. There are no roles: every member has the same rights (PRD §3).

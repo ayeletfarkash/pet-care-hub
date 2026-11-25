@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { eventOccurrenceStatus, events, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { occurrences, type LocalDate } from "../schedule";
@@ -80,8 +81,9 @@ export async function updateEvent(userId: string, groupId: string, eventId: stri
 export async function deleteEvent(userId: string, groupId: string, eventId: string) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);
-    const res = await tx.delete(events).where(and(eq(events.id, eventId), eq(events.groupId, groupId)));
-    if (res.rowsAffected === 0) throw new AppError("not_found");
+    const [e] = await tx.delete(events).where(and(eq(events.id, eventId), eq(events.groupId, groupId))).returning();
+    if (!e) throw new AppError("not_found");
+    await audit(tx, { groupId, actorId: userId, action: "event.deleted", meta: { id: e.id, title: e.title, startsAt: e.startsAt } });
   });
 }
 

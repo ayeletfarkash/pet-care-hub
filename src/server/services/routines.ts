@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { routineLogs, routines, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { isScheduledDose, medicationDoses, nowLocal, todayLocal, type LocalDate } from "../schedule";
@@ -136,8 +137,12 @@ export async function logActivity(userId: string, groupId: string, input: { rout
 export async function removeLog(userId: string, groupId: string, logId: string) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);
-    const res = await tx.delete(routineLogs).where(and(eq(routineLogs.id, logId), eq(routineLogs.groupId, groupId)));
-    if (res.rowsAffected === 0) throw new AppError("not_found");
+    const [l] = await tx.delete(routineLogs).where(and(eq(routineLogs.id, logId), eq(routineLogs.groupId, groupId))).returning();
+    if (!l) throw new AppError("not_found");
+    await audit(tx, {
+      groupId, actorId: userId, action: "routine_log.deleted",
+      meta: { id: l.id, routineId: l.routineId, scheduledFor: l.scheduledFor, status: l.status, at: l.at, byUserId: l.byUserId },
+    });
   });
 }
 

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, writeTx } from "../db";
 import { medicationAdministrations, medicationPlans, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { addDays, isScheduledDose, medicationDoses, nowLocal, todayLocal, type LocalDate } from "../schedule";
@@ -145,9 +146,13 @@ export async function recordAdministration(userId: string, groupId: string, plan
 export async function removeAdministration(userId: string, groupId: string, administrationId: string) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);
-    const res = await tx.delete(medicationAdministrations)
-      .where(and(eq(medicationAdministrations.id, administrationId), eq(medicationAdministrations.groupId, groupId)));
-    if (res.rowsAffected === 0) throw new AppError("not_found");
+    const [a] = await tx.delete(medicationAdministrations)
+      .where(and(eq(medicationAdministrations.id, administrationId), eq(medicationAdministrations.groupId, groupId))).returning();
+    if (!a) throw new AppError("not_found");
+    await audit(tx, {
+      groupId, actorId: userId, action: "dose.deleted",
+      meta: { id: a.id, planId: a.planId, scheduledFor: a.scheduledFor, administeredAt: a.administeredAt, administeredById: a.administeredById },
+    });
   });
 }
 

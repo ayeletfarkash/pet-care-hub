@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
 import { dismissedAutoTasks, notifications, reminderRuleRecipients, reminderRules, taskAssignees, taskComments, taskHistory, taskTransferRequests, tasks, users } from "../db/schema";
+import { audit } from "../audit";
 import { AppError, isUniqueViolation } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { addMinutesLocal, nextOccurrence, nowLocal, type LocalDate } from "../schedule";
@@ -173,6 +174,7 @@ export async function deleteTask(userId: string, groupId: string, taskId: string
     for (const child of [taskAssignees, taskComments, taskHistory, taskTransferRequests]) await tx.delete(child).where(eq(child.taskId, taskId));
     if (t.sourceKey) await tx.insert(dismissedAutoTasks).values({ groupId, sourceKey: t.sourceKey }).onConflictDoNothing();
     await tx.delete(tasks).where(eq(tasks.id, taskId));
+    await audit(tx, { groupId, actorId: userId, action: "task.deleted", meta: { id: t.id, title: t.title, dueAt: t.dueAt, status: t.status } });
   });
 }
 
