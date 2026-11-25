@@ -64,6 +64,13 @@
       "when": 1795375240713,
       "tag": "0008_task_delete_custom_reminder",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795621003529,
+      "tag": "0009_google_signin_password_reset",
+      "breakpoints": true
     }
   ]
 }

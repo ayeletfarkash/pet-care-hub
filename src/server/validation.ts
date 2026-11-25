@@ -27,14 +27,19 @@ const optNumber = (max: number) =>
 
 export const email = z.string().trim().toLowerCase().min(1, "required").max(254, "too_long").email("email");
 
+const newPassword = z.string().min(8, "password_min").max(200, "too_long");
+
 export const registerSchema = z.object({
   name: req(),
   email,
-  password: z.string().min(8, "password_min").max(200, "too_long"),
+  password: newPassword,
   locale: z.enum(LOCALES).catch("he"),
 });
 
 export const loginSchema = z.object({ email, password: z.string().min(1, "required").max(200, "too_long") });
+
+export const forgotPasswordSchema = z.object({ email });
+export const resetPasswordSchema = z.object({ password: newPassword });
 
 export const profileSchema = z.object({ name: req(), locale: z.enum(LOCALES) });
 

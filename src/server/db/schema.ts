@@ -12,7 +12,8 @@ export const users = sqliteTable("users", {
   id: id(),
   email: text("email").notNull().unique(), // stored lower-cased + trimmed
   name: text("name").notNull(),
-  passwordHash: text("password_hash"), // null for future OAuth-only accounts
+  passwordHash: text("password_hash"), // null for Google-only accounts
+  googleSub: text("google_sub").unique(), // Google account id (OpenID `sub`)
   locale: text("locale", { enum: LOCALES }).notNull().default("he"),
   createdAt: createdAt(),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }), // account deletion (PRD §4.8), not used in Phase 1
@@ -28,6 +29,16 @@ export const sessions = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
+);
+
+export const passwordResetTokens = sqliteTable(
+  "password_reset_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("password_reset_tokens_user_idx").on(t.userId)],
 );
 
 export const accessibilityPreferences = sqliteTable("accessibility_preferences", {
