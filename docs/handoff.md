@@ -3,13 +3,13 @@
 Keep this short. Newest entry on top; trim entries older than the current phase.
 
 ## Current state
-- Phases 1–4, the calendar/completion UI and the removal of roles are merged into `dev` (not pushed).
+- Phases 1–4, the calendar/completion UI, the removal of roles, and password reset + Google sign-in are merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
-- Tests: 95 Vitest + 28 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-25.
+- Tests: 106 Vitest + 32 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-25.
 - Local dev DB migrated through 0009 (latest backup: `data/app.db.bak-pre-google-signin`; older `-pre-tasks-delete`, `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
 
-- Branch `feature/google-signin-password-reset` (not merged): password reset + Google sign-in. 106 Vitest + 32 Playwright passing on 2026-11-25. Not yet tried with real Gmail or Google credentials ([setup](development.md)).
+- Password reset and Google sign-in: not yet tried with real Gmail or Google credentials ([setup](development.md)).
 
 ## Next steps
 0. Add `SMTP_URL` and `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` to `.env.local`, then try a real reset email and a real Google sign-in.
