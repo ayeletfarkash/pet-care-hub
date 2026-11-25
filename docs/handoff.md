@@ -6,6 +6,7 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Phases 1–4 merged into `dev` (not pushed).
 - Stack: Next.js 16 + TS + Drizzle/SQLite + Tailwind 4. See [architecture.md](architecture.md).
 - Calendar/routine completion (UI improvements phase 4) is on `feature/phase4-calendar`, not merged.
+- Roles are removed on `feature/remove-roles` (includes the calendar branch), not merged.
 - Tests: 94 Vitest + 28 Playwright (incl. axe WCAG 2.2 AA, he + en), all passing on 2026-11-25.
 - Local dev DB migrated through 0008 (latest backup: `data/app.db.bak-pre-tasks-delete`; older `-pre-phase3`, `-pre-phase4*`, `-pre-invite-enc`).
 - `.env.local` (git-ignored) holds generated dev VAPID keys, so push works on localhost.
@@ -25,6 +26,13 @@ Keep this short. Newest entry on top; trim entries older than the current phase.
 - Obsidian vault location (MCP server was unreachable).
 
 ## Log
+### 2026-11-25: Roles removed (branch `feature/remove-roles`, on top of `feature/phase4-calendar`)
+- Decision (user): no roles or per-member permissions; every member of a group can do everything, including inviting/removing members and deleting the group. Group isolation (`requireMembership`) is unchanged and still the only gate.
+- Consequences: last-Admin rule → last member can't leave (`last_member`); handovers apply at once (`transferTask`; approval flow and dashboard approvals removed); no 48 h back-recording limit; any member can restore a deleted group; anyone can correct dose/routine records in the history (checkboxes stay locked).
+- No migration: `memberships.role`, `invitations.role` and `task_transfer_requests` stay in the DB, unused. Reverting the branch restores roles; members who joined meanwhile would be admins.
+- Existing Caregivers and open invitation links get full rights when this ships: review members and revoke links first.
+- Agents used: security-reviewer (no Critical/High; isolation and last-member guard intact). Open, user to decide: deleting a record (dose, routine log, task, event) is not written to `audit_logs`; pre-existing, but now any member can do it. Accepted: any member can remove others or delete the group (restorable 30 days); rejoin through a reusable link (the remove dialog says to revoke it).
+- PRD §3 and §26 rewritten; elsewhere PRD "Admin/Caregiver" reads as "any member".
 ### 2026-11-25: Calendar view and completion checkboxes (branch `feature/phase4-calendar`)
 - Decisions (user): recorded doses and routine logs are locked once checked (unchecking would delete the record; Admins still correct them in the plan/routine history); the checkbox sits at the start of the row (right in Hebrew, left in English), like the task list.
 - `CompletionCheckbox` (`on` / optional `off` fields) replaces `TaskCheckbox` and the complete/given/done buttons everywhere except the inbox. No `off` = locked. Server actions, services and schema for doses, routines and events are unchanged. "Report missed" and event "Cancel"/"Undo" stay buttons.

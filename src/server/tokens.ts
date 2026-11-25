@@ -4,7 +4,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 export const newToken = () => randomBytes(32).toString("base64url");
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-// Invitation tokens are also kept encrypted so admins can copy/share an active link again.
+// Invitation tokens are also kept encrypted so members can copy/share an active link again.
 function key() {
   const secret = process.env.INVITE_LINK_SECRET;
   if (!secret) {

@@ -9,7 +9,7 @@ import { rateLimit } from "../rate-limit";
 
 // Global search (PRD §14). Scope = the groups the user belongs to right now, computed here and never taken
 // from the request; a group filter can only narrow it. Every query has `group_id IN (scope)`.
-// Both roles may read everything in their groups (PRD §3.3), so there is no per-type role filter.
+// Members may read everything in their groups (PRD §3).
 // shortcut: LIKE scans (fine for one household's data); move to FTS when groups hold thousands of rows.
 
 export const SEARCH_LIMIT = 20; // per type

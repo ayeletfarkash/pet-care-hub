@@ -16,7 +16,7 @@ const code = async (p: Promise<unknown>) => {
 async function setup() {
   const admin = await makeUser("Admin"), care = await makeUser("Care"), out = await makeUser("Out");
   const g = await makeGroup(admin.id), gOut = await makeGroup(out.id, "Other");
-  const token = await createInvitation(admin.id, g, { role: "caregiver", reusable: false, email: null, expiresInDays: 7 });
+  const token = await createInvitation(admin.id, g, { reusable: false, email: null, expiresInDays: 7 });
   await acceptInvitation(care.id, token);
   return { admin: admin.id, care: care.id, out: out.id, g, gOut };
 }
@@ -27,12 +27,12 @@ const order = (o = {}) => newOrderSchema.parse({ product: "Kibble 10 kg", orderD
 beforeEach(() => resetRateLimits());
 
 describe("inventory", () => {
-  it("only admins manage products; both roles update quantities; outsiders see nothing", async () => {
+  it("members manage products and quantities; outsiders see nothing", async () => {
     const s = await setup();
-    expect(await code(createItem(s.care, s.g, item()))).toBe("forbidden");
-    const id = await createItem(s.admin, s.g, item());
-    expect(await code(updateItem(s.care, s.g, id, item({ name: "X" })))).toBe("forbidden");
-    expect(await code(deleteItem(s.care, s.g, id))).toBe("forbidden");
+    expect(await code(createItem(s.out, s.g, item()))).toBe("not_found");
+    const id = await createItem(s.care, s.g, item());
+    expect(await code(updateItem(s.out, s.gOut, id, item({ name: "X" })))).toBe("not_found");
+    expect(await code(deleteItem(s.out, s.gOut, id))).toBe("not_found");
     expect(await code(listItems(s.out, s.g))).toBe("not_found");
     expect(await code(changeStock(s.out, s.gOut, id, stock("consumption", "1")))).toBe("not_found"); // id from another group
 
@@ -68,17 +68,17 @@ describe("inventory", () => {
 });
 
 describe("orders", () => {
-  it("both roles create and change status; only admins edit or delete; urls are http(s) only", async () => {
+  it("members create, edit and delete; outsiders cannot; urls are http(s) only", async () => {
     const s = await setup();
     const id = await createOrder(s.care, s.g, order());
     await setOrderStatus(s.care, s.g, id, "shipped", false);
     expect((await getOrder(s.admin, s.g, id)).order.status).toBe("shipped");
-    expect(await code(updateOrder(s.care, s.g, id, orderSchema.parse({ product: "X", orderDate: todayLocal() })))).toBe("forbidden");
-    expect(await code(deleteOrder(s.care, s.g, id))).toBe("forbidden");
+    expect(await code(updateOrder(s.out, s.gOut, id, orderSchema.parse({ product: "X", orderDate: todayLocal() })))).toBe("not_found");
+    expect(await code(deleteOrder(s.out, s.gOut, id))).toBe("not_found");
     expect(await code(getOrder(s.out, s.gOut, id))).toBe("not_found");
     for (const url of ["javascript:alert(1)", "data:text/html,x", "example.com", "https://user:pw@evil.example"]) expect(orderSchema.safeParse({ product: "X", orderDate: todayLocal(), url }).success).toBe(false);
     expect(orderSchema.parse({ product: "X", orderDate: todayLocal(), url: "https://shop.example/p?id=1" }).url).toBe("https://shop.example/p?id=1");
-    await deleteOrder(s.admin, s.g, id);
+    await deleteOrder(s.care, s.g, id);
   });
 
   it("delivering adds the quantity to the linked item exactly once", async () => {
@@ -102,11 +102,11 @@ describe("orders", () => {
 describe("routines", () => {
   const routine = (o = {}) => routineSchema.parse({ name: "Walk", scheduleType: "daily", times: ["00:00"], startDate: addDays(todayLocal(), -3), ...o });
 
-  it("only admins define routines; both roles log completed and missed activities", async () => {
+  it("members define routines and log completed and missed activities; outsiders cannot", async () => {
     const s = await setup();
-    expect(await code(createRoutine(s.care, s.g, routine()))).toBe("forbidden");
-    const id = await createRoutine(s.admin, s.g, routine({ responsibleUserId: s.care }));
-    expect(await code(updateRoutine(s.care, s.g, id, routine()))).toBe("forbidden");
+    expect(await code(createRoutine(s.out, s.g, routine()))).toBe("not_found");
+    const id = await createRoutine(s.care, s.g, routine({ responsibleUserId: s.care }));
+    expect(await code(updateRoutine(s.out, s.gOut, id, routine()))).toBe("not_found");
     const today = `${todayLocal()}T00:00`, yesterday = `${addDays(todayLocal(), -1)}T00:00`;
     await logActivity(s.care, s.g, { routineId: id, scheduledFor: today, status: "completed" });
     await logActivity(s.care, s.g, { routineId: id, scheduledFor: yesterday, status: "missed" });
@@ -118,21 +118,20 @@ describe("routines", () => {
     expect(await code(logActivity(s.out, s.gOut, { routineId: id, scheduledFor: today, status: "completed" }))).toBe("not_found");
   });
 
-  it("validates occurrences: invented, future, too old for caregivers; extras are completed only", async () => {
+  it("validates occurrences: invented and future ones refused; extras are completed only", async () => {
     const s = await setup();
     const id = await createRoutine(s.admin, s.g, routine({ startDate: addDays(todayLocal(), -10) }));
-    const bad = (scheduledFor: string | null, status: "completed" | "missed" = "completed", who = s.care) => code(logActivity(who, s.g, { routineId: id, scheduledFor, status }));
+    const bad = (scheduledFor: string | null, status: "completed" | "missed" = "completed") => code(logActivity(s.care, s.g, { routineId: id, scheduledFor, status }));
     expect(await bad(`${todayLocal()}T13:37`)).toBe("invalid_occurrence_log");
     expect(await bad(`${addDays(todayLocal(), 2)}T00:00`)).toBe("invalid_occurrence_log");
-    expect(await bad(`${addDays(todayLocal(), -5)}T00:00`)).toBe("invalid_occurrence_log");
-    expect(await bad(`${addDays(todayLocal(), -5)}T00:00`, "missed", s.admin)).toBe("ok");
+    expect(await bad(`${addDays(todayLocal(), -5)}T00:00`, "missed")).toBe("ok"); // no limit on how far back
     expect(await bad(null, "missed")).toBe("invalid_occurrence_log");
     expect(await bad(null)).toBe("ok");
     expect(await bad(null)).toBe("ok"); // several extras allowed
     expect(await routineHistory(s.admin, s.g, id)).toHaveLength(3);
   });
 
-  it("routines with history are ended, not deleted; logs can be removed by admins; removal releases responsibility", async () => {
+  it("routines with history are ended, not deleted; any member can remove a log; removing a member releases responsibility", async () => {
     const s = await setup();
     const id = await createRoutine(s.admin, s.g, routine({ responsibleUserId: s.care }));
     await logActivity(s.care, s.g, { routineId: id, scheduledFor: null, status: "completed" });
@@ -140,8 +139,8 @@ describe("routines", () => {
     await endRoutine(s.admin, s.g, id);
     expect((await getRoutine(s.care, s.g, id)).routine.endDate).toBe(todayLocal());
     const [log] = await routineHistory(s.admin, s.g, id);
-    expect(await code(removeLog(s.care, s.g, log.id))).toBe("forbidden");
-    await removeLog(s.admin, s.g, log.id);
+    expect(await code(removeLog(s.out, s.gOut, log.id))).toBe("not_found");
+    await removeLog(s.care, s.g, log.id);
     await removeMember(s.admin, s.g, s.care);
     expect((await getRoutine(s.admin, s.g, id)).routine.responsibleUserId).toBeNull();
     await deleteRoutine(s.admin, s.g, id);

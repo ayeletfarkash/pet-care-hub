@@ -17,8 +17,8 @@ import { loadGroup } from "../../load";
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ groupId: string; orderId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, orderId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { order: o, role } = await getOrder(user.id, groupId, orderId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
-  const k = t.orders, isAdmin = role === "admin";
+  const { order: o } = await getOrder(user.id, groupId, orderId).catch((e) => { if (e instanceof AppError) notFound(); throw e; });
+  const k = t.orders;
   const canStock = !!o.itemId && !!o.itemName && !!o.quantity && o.quantity > 0 && !o.addedToStock;
   const row = (label: string, value: React.ReactNode) => <><dt className="font-semibold text-muted">{label}</dt><dd>{value}</dd></>;
   return (
@@ -30,7 +30,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <h1 className="text-3xl font-bold">{o.product}</h1>
           <p className="mt-1"><Badge tone={orderTone[o.status]}>{k.statuses[o.status]}</Badge></p>
         </div>
-        {isAdmin && <LinkButton variant="secondary" href={`/groups/${groupId}/orders/${orderId}/edit`}>{t.ui.edit}</LinkButton>}
+        <LinkButton variant="secondary" href={`/groups/${groupId}/orders/${orderId}/edit`}>{t.ui.edit}</LinkButton>
       </div>
       <dl className="card mb-6 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
         {row(k.orderDate, formatDate(locale, o.orderDate))}
@@ -53,13 +53,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           stockLabel={canStock ? fmt(k.addToStock, { qty: qtyText(locale, o.quantity!, o.itemUnit), item: o.itemName! }) : undefined} />
       </section>
 
-      {isAdmin && (
-        <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
-          <ConfirmDialog triggerLabel={k.deleteOrder} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { name: o.product })} body={k.deleteBody}>
-            <ActionForm action={deleteOrderAction} fields={{ groupId, orderId }} label={k.deleteOrder} pendingLabel={t.common.saving} variant="danger" />
-          </ConfirmDialog>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-3 border-t-2 border-divider pt-6">
+        <ConfirmDialog triggerLabel={k.deleteOrder} cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { name: o.product })} body={k.deleteBody}>
+          <ActionForm action={deleteOrderAction} fields={{ groupId, orderId }} label={k.deleteOrder} pendingLabel={t.common.saving} variant="danger" />
+        </ConfirmDialog>
+      </div>
     </div>
   );
 }

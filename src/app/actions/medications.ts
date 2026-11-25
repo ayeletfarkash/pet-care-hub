@@ -46,7 +46,7 @@ export async function deletePlanAction(_: FormState, fd: FormData): Promise<Form
   });
 }
 
-/** Both roles. Used from the medications page, the calendar and the dashboard. */
+/** Used from the medications page, the calendar and the dashboard. */
 export async function markDoseAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");

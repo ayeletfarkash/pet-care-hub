@@ -10,8 +10,7 @@ import { loadGroup } from "../../../load";
 
 export default async function EditEventPage({ params }: { params: Promise<{ groupId: string; eventId: string }> }) {
   const { groupId, eventId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const [{ event: e }, members] = await Promise.all([getEvent(user.id, groupId, eventId).catch(() => notFound()), listMembers(user.id, groupId)]);
   const initial = { ...e, date: e.startsAt.slice(0, 10), time: e.allDay ? "" : e.startsAt.slice(11) };
   return (

@@ -224,7 +224,7 @@ export function CommentForm({ t, action, hidden }: { t: Dict; action: Action; hi
   );
 }
 
-export function TransferForm({ t, action, hidden, members, isAdmin }: { t: Dict; action: Action; hidden: Record<string, string>; members: Member[]; isAdmin: boolean }) {
+export function TransferForm({ t, action, hidden, members }: { t: Dict; action: Action; hidden: Record<string, string>; members: Member[] }) {
   const { state, formAction, ref } = useForm(action);
   return (
     <form ref={ref} action={formAction} className="flex flex-wrap items-end gap-3">
@@ -232,7 +232,7 @@ export function TransferForm({ t, action, hidden, members, isAdmin }: { t: Dict;
       <Hidden fields={hidden} />
       <SelectField id="transfer-to" name="toUserId" label={t.tasks.transferTo} className="min-w-48 flex-1"
         options={members.map((m) => ({ value: m.userId, label: m.name }))} />
-      <SubmitButton variant="secondary" pendingLabel={t.common.saving} className="mb-0">{isAdmin ? t.tasks.transferApply : t.tasks.transferRequest}</SubmitButton>
+      <SubmitButton variant="secondary" pendingLabel={t.common.saving} className="mb-0">{t.tasks.transferApply}</SubmitButton>
     </form>
   );
 }
@@ -283,7 +283,7 @@ export function InventoryItemForm({ t, action, hidden, initial, plans, submitLab
   );
 }
 
-/** Both roles: record use, a purchase, a counted quantity, or that it ran out. */
+/** Record use, a purchase, a counted quantity, or that it ran out. */
 export function StockForm({ t, action, hidden }: { t: Dict; action: Action; hidden: Record<string, string> }) {
   const { state, formAction, ref, f } = useForm(action, { kind: "consumption" });
   useResetOnSuccess(state, ref);
@@ -332,7 +332,7 @@ export function OrderForm({ t, action, hidden, initial, items, submitLabel, toda
   );
 }
 
-/** Both roles. The add-to-stock checkbox only appears when the order is linked to an item with a quantity. */
+/** The add-to-stock checkbox only appears when the order is linked to an item with a quantity. */
 export function OrderStatusForm({ t, action, hidden, status, stockLabel }: { t: Dict; action: Action; hidden: Record<string, string>; status: string; stockLabel?: string }) {
   const { state, formAction, ref } = useForm(action);
   const o = t.orders;
@@ -370,7 +370,7 @@ export function RoutineForm({ t, action, hidden, initial, members, submitLabel, 
   );
 }
 
-/** Both roles: log an activity that wasn't on the schedule. */
+/** Log an activity that wasn't on the schedule. */
 export function ExtraActivityForm({ t, action, hidden }: { t: Dict; action: Action; hidden: Record<string, string> }) {
   const { state, formAction, ref, e } = useForm(action);
   useResetOnSuccess(state, ref);

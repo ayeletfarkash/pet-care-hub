@@ -6,7 +6,7 @@ import { deleteStoredFiles, readStoredFile, safeDisplayName, storeDocument } fro
 import { requireMembership } from "../permissions";
 import type { MedicalRecordInput } from "../validation";
 
-// PRD §6.1–6.2: both roles view, add records and upload documents; only Admins edit/delete.
+// PRD §6.1–6.2.
 
 export async function listMedicalRecords(userId: string, groupId: string) {
   await requireMembership(db, userId, groupId);
@@ -25,11 +25,11 @@ export async function listMedicalRecords(userId: string, groupId: string) {
 }
 
 export async function getMedicalRecord(userId: string, groupId: string, recordId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const record = await db.select().from(medicalRecords).where(and(eq(medicalRecords.id, recordId), eq(medicalRecords.groupId, groupId))).get();
   if (!record) throw new AppError("not_found");
   const files = await db.select().from(attachments).where(and(eq(attachments.groupId, groupId), eq(attachments.medicalRecordId, recordId)));
-  return { record, attachments: files, role };
+  return { record, attachments: files };
 }
 
 /** Files are written first, then rows in one transaction; on failure the written files are removed. */
@@ -56,7 +56,7 @@ export async function createMedicalRecord(userId: string, groupId: string, input
   );
 }
 
-/** Adding documents to an existing record is "adding documentation", allowed for both roles. */
+/** Add documents to an existing record. */
 export async function addAttachments(userId: string, groupId: string, recordId: string, uploads: { name: string; data: Uint8Array }[]) {
   await requireMembership(db, userId, groupId);
   return withStoredFiles(uploads, (stored) =>
@@ -71,7 +71,7 @@ export async function addAttachments(userId: string, groupId: string, recordId: 
 
 export async function updateMedicalRecord(userId: string, groupId: string, recordId: string, input: MedicalRecordInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const res = await tx.update(medicalRecords).set({ ...input, updatedAt: new Date() })
       .where(and(eq(medicalRecords.id, recordId), eq(medicalRecords.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
@@ -80,7 +80,7 @@ export async function updateMedicalRecord(userId: string, groupId: string, recor
 
 export async function deleteMedicalRecord(userId: string, groupId: string, recordId: string) {
   const files = await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const rows = await tx.select({ file: attachments.file }).from(attachments).where(and(eq(attachments.groupId, groupId), eq(attachments.medicalRecordId, recordId)));
     const res = await tx.delete(medicalRecords).where(and(eq(medicalRecords.id, recordId), eq(medicalRecords.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
@@ -91,7 +91,7 @@ export async function deleteMedicalRecord(userId: string, groupId: string, recor
 
 export async function deleteAttachment(userId: string, groupId: string, attachmentId: string) {
   const file = await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const row = await tx.select({ file: attachments.file }).from(attachments).where(and(eq(attachments.id, attachmentId), eq(attachments.groupId, groupId))).get();
     if (!row) throw new AppError("not_found");
     await tx.delete(attachments).where(eq(attachments.id, attachmentId));

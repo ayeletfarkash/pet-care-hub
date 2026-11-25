@@ -15,9 +15,9 @@ export async function generateMetadata() {
 
 export default async function RoutinesPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId } = await params;
-  const [{ user, role }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
+  const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
   const today = todayLocal();
-  // Caregivers can log up to 48 h back, so unlogged activities from the last 2 days are offered.
+  // Unlogged activities from the last 2 days are offered too.
   const [{ routines }, acts] = await Promise.all([listRoutines(user.id, groupId), groupActivities(user.id, groupId, addDays(today, -2), today)]);
   const r = t.routines;
   const todays = acts.filter((a) => a.scheduledFor.startsWith(today));
@@ -25,7 +25,7 @@ export default async function RoutinesPage({ params, searchParams }: { params: P
   return (
     <>
       <Notice t={t} notice={sp.notice} />
-      <SectionHeader as="h1" id="routines-h" title={r.title} action={role === "admin" ? { href: `/groups/${groupId}/routines/new`, label: r.add } : undefined} />
+      <SectionHeader as="h1" id="routines-h" title={r.title} action={{ href: `/groups/${groupId}/routines/new`, label: r.add }} />
       <p className="mb-6 text-muted">{r.intro}</p>
 
       <section aria-labelledby="today-h" className="mb-8">

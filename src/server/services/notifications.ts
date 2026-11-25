@@ -34,8 +34,6 @@ export async function setNotificationPrefs(userId: string, enabled: Notification
 
 // ─────────── Reminder rules (recipients + lead time per source) ───────────
 const SOURCE_TABLE = { medication: medicationPlans, event: events, task: tasks, routine: routines } as const;
-/** Who may set reminders: whoever may create that kind of record (PRD §3.3). */
-const RULE_ROLE: Record<ReminderSource, "admin" | undefined> = { medication: "admin", routine: "admin", event: undefined, task: undefined };
 
 async function requireSource(ex: Tx | typeof db, groupId: string, type: ReminderSource, sourceId: string) {
   const t = SOURCE_TABLE[type];
@@ -44,7 +42,7 @@ async function requireSource(ex: Tx | typeof db, groupId: string, type: Reminder
 }
 
 export async function getReminderRule(userId: string, groupId: string, type: ReminderSource, sourceId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   await requireSource(db, groupId, type, sourceId);
   const rule = await db.select().from(reminderRules)
     .where(and(eq(reminderRules.groupId, groupId), eq(reminderRules.sourceType, type), eq(reminderRules.sourceId, sourceId))).get();
@@ -52,7 +50,6 @@ export async function getReminderRule(userId: string, groupId: string, type: Rem
     ? (await db.select({ userId: reminderRuleRecipients.userId }).from(reminderRuleRecipients).where(eq(reminderRuleRecipients.ruleId, rule.id))).map((r) => r.userId)
     : [];
   return {
-    canEdit: RULE_ROLE[type] !== "admin" || role === "admin",
     leadMinutes: rule?.leadMinutes ?? DEFAULT_LEAD[type],
     remindAt: rule?.remindAt ?? null,
     recipientMode: rule?.recipientMode ?? "responsible",
@@ -62,7 +59,7 @@ export async function getReminderRule(userId: string, groupId: string, type: Rem
 
 export async function setReminderRule(userId: string, groupId: string, type: ReminderSource, sourceId: string, input: ReminderRuleInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, RULE_ROLE[type]);
+    await requireMembership(tx, userId, groupId);
     await requireSource(tx, groupId, type, sourceId);
     await requireMembersOf(tx, groupId, input.recipients);
     if (input.remindAt && type !== "task") throw new AppError("invalid_input"); // the sweep only handles custom times for tasks

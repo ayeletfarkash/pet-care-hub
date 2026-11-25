@@ -15,7 +15,7 @@ if (process.env.NODE_ENV !== "production") g.__pchClient = client;
 export const db = drizzle(client, { schema });
 export type DB = typeof db;
 // Transactions on local libsql open with BEGIN IMMEDIATE (write lock up front), which the
-// last-admin and invite-consume checks rely on.
+// last-member and invite-consume checks rely on.
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 export type Executor = DB | Tx;
 export { client };

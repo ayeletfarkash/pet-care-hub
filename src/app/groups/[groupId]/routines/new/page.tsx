@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { listMembers } from "@/server/services/members";
 import { todayLocal } from "@/server/schedule";
 import { getT } from "@/i18n/server";
@@ -14,8 +13,7 @@ export async function generateMetadata() {
 
 export default async function NewRoutinePage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const members = await listMembers(user.id, groupId);
   return (
     <div className="mx-auto max-w-3xl">

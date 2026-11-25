@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/session";
-import { addComment, completeTask, createTask, decideTransfer, deleteTask, reopenTask, requestTransfer, startTask, updateTask } from "@/server/services/tasks";
+import { addComment, completeTask, createTask, deleteTask, reopenTask, startTask, transferTask, updateTask } from "@/server/services/tasks";
 import { commentSchema, taskSchema } from "@/server/validation";
 import { AppError } from "@/server/errors";
 import { getT } from "@/i18n/server";
@@ -45,7 +45,7 @@ export async function taskStatusAction(_: FormState, fd: FormData): Promise<Form
   });
 }
 
-/** Permanent delete (Admins; enforced in the service). From the list (`stay`) the row just goes; the task page itself has to redirect. */
+/** Permanent delete. From the list (`stay`) the row just goes; the task page itself has to redirect. */
 export async function deleteTaskAction(_: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const groupId = str(fd, "groupId");
@@ -72,20 +72,9 @@ export async function transferAction(_: FormState, fd: FormData): Promise<FormSt
   const user = await requireUser();
   const groupId = str(fd, "groupId"), taskId = str(fd, "taskId");
   return handleAction(async () => {
-    const result = await requestTransfer(user.id, groupId, taskId, str(fd, "toUserId"));
+    await transferTask(user.id, groupId, taskId, str(fd, "toUserId"));
     refresh();
     const { t } = await getT();
-    return { ok: true, message: result === "applied" ? t.tasks.transferApplied : t.tasks.transferRequested };
-  });
-}
-
-export async function decideTransferAction(_: FormState, fd: FormData): Promise<FormState> {
-  const user = await requireUser();
-  const groupId = str(fd, "groupId"), taskId = str(fd, "taskId");
-  return handleAction(async () => {
-    await decideTransfer(user.id, groupId, taskId, str(fd, "decision") === "approve");
-    refresh();
-    const { t } = await getT();
-    return { ok: true, message: t.tasks.decided };
+    return { ok: true, message: t.tasks.transferApplied };
   });
 }

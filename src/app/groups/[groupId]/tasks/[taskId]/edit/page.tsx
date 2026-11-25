@@ -9,8 +9,7 @@ import { loadGroup } from "../../../load";
 
 export default async function EditTaskPage({ params }: { params: Promise<{ groupId: string; taskId: string }> }) {
   const { groupId, taskId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const [{ task: x, assignees }, members] = await Promise.all([getTask(user.id, groupId, taskId).catch(() => notFound()), listMembers(user.id, groupId)]);
   const initial = {
     ...x,

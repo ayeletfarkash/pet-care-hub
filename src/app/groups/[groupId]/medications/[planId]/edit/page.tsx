@@ -10,8 +10,7 @@ import { loadGroup } from "../../../load";
 
 export default async function EditPlanPage({ params }: { params: Promise<{ groupId: string; planId: string }> }) {
   const { groupId, planId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const [{ plan }, members] = await Promise.all([getPlan(user.id, groupId, planId).catch(() => notFound()), listMembers(user.id, groupId)]);
   return (
     <div className="mx-auto max-w-3xl">

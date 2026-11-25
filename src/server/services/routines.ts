@@ -5,7 +5,7 @@ import { AppError } from "../errors";
 import { requireMembersOf, requireMembership } from "../permissions";
 import { isScheduledDose, medicationDoses, nowLocal, todayLocal, type LocalDate } from "../schedule";
 import type { RoutineInput } from "../validation";
-import { CAREGIVER_BACKFILL_HOURS, EARLY_DOSE_MINUTES } from "./medications";
+import { EARLY_DOSE_MINUTES } from "./medications";
 
 // PRD §11. Activities are computed from the routine's schedule (same rules as medication plans);
 // a log row records each completed or missed activity. Extra unscheduled activities have no
@@ -14,24 +14,24 @@ import { CAREGIVER_BACKFILL_HOURS, EARLY_DOSE_MINUTES } from "./medications";
 export type Routine = typeof routines.$inferSelect;
 
 export async function listRoutines(userId: string, groupId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const rows = await db.select({ r: routines, responsibleName: users.name }).from(routines)
     .leftJoin(users, eq(users.id, routines.responsibleUserId))
     .where(eq(routines.groupId, groupId)).orderBy(asc(routines.name));
   const today = todayLocal();
-  return { role, routines: rows.map(({ r, responsibleName }) => ({ ...r, responsibleName, active: !r.endDate || r.endDate >= today })) };
+  return { routines: rows.map(({ r, responsibleName }) => ({ ...r, responsibleName, active: !r.endDate || r.endDate >= today })) };
 }
 
 export async function getRoutine(userId: string, groupId: string, routineId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const routine = await db.select().from(routines).where(and(eq(routines.id, routineId), eq(routines.groupId, groupId))).get();
   if (!routine) throw new AppError("not_found");
-  return { routine, role };
+  return { routine };
 }
 
 export async function createRoutine(userId: string, groupId: string, input: RoutineInput) {
   return writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, [input.responsibleUserId]);
     const [r] = await tx.insert(routines).values({ ...input, groupId, createdById: userId }).returning({ id: routines.id });
     return r.id;
@@ -40,7 +40,7 @@ export async function createRoutine(userId: string, groupId: string, input: Rout
 
 export async function updateRoutine(userId: string, groupId: string, routineId: string, input: RoutineInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await requireMembersOf(tx, groupId, [input.responsibleUserId]);
     const res = await tx.update(routines).set({ ...input, updatedAt: new Date() }).where(and(eq(routines.id, routineId), eq(routines.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
@@ -50,7 +50,7 @@ export async function updateRoutine(userId: string, groupId: string, routineId: 
 /** Stop a routine from today on, keeping its history. */
 export async function endRoutine(userId: string, groupId: string, routineId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const r = await tx.select().from(routines).where(and(eq(routines.id, routineId), eq(routines.groupId, groupId))).get();
     if (!r) throw new AppError("not_found");
     const today = todayLocal();
@@ -61,7 +61,7 @@ export async function endRoutine(userId: string, groupId: string, routineId: str
 /** Only routines without logged activities can be deleted (logs would cascade). */
 export async function deleteRoutine(userId: string, groupId: string, routineId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const used = await tx.select({ id: routineLogs.id }).from(routineLogs).where(and(eq(routineLogs.routineId, routineId), eq(routineLogs.groupId, groupId))).limit(1).get();
     if (used) throw new AppError("routine_has_history");
     const res = await tx.delete(routines).where(and(eq(routines.id, routineId), eq(routines.groupId, groupId)));
@@ -109,13 +109,13 @@ export async function groupActivities(userId: string, groupId: string, from: Loc
 }
 
 /**
- * Both roles. Logs a scheduled activity as completed or missed (re-logging the same activity
+ * Logs a scheduled activity as completed or missed (re-logging the same activity
  * updates it, e.g. missed → completed), or an extra activity (`scheduledFor` null, completed only).
- * Scheduled activities must be real occurrences, not in the future; Caregivers can log ≤ 48 h back.
+ * Scheduled activities must be real occurrences, not in the future.
  */
 export async function logActivity(userId: string, groupId: string, input: { routineId: string; scheduledFor?: string | null; status: "completed" | "missed"; notes?: string | null }) {
   await writeTx(async (tx) => {
-    const role = await requireMembership(tx, userId, groupId);
+    await requireMembership(tx, userId, groupId);
     const r = await tx.select().from(routines).where(and(eq(routines.id, input.routineId), eq(routines.groupId, groupId))).get();
     if (!r) throw new AppError("not_found");
     const at = nowLocal(), notes = input.notes ?? null;
@@ -126,17 +126,16 @@ export async function logActivity(userId: string, groupId: string, input: { rout
     }
     const s = input.scheduledFor;
     const latest = nowLocal(new Date(Date.now() + EARLY_DOSE_MINUTES * 60_000));
-    const earliest = role === "admin" ? "" : nowLocal(new Date(Date.now() - CAREGIVER_BACKFILL_HOURS * 3_600_000));
-    if (!isScheduledDose(r, s) || s > latest || s < earliest) throw new AppError("invalid_occurrence_log");
+    if (!isScheduledDose(r, s) || s > latest) throw new AppError("invalid_occurrence_log");
     await tx.insert(routineLogs).values({ groupId, routineId: r.id, scheduledFor: s, status: input.status, at, byUserId: userId, notes })
       .onConflictDoUpdate({ target: [routineLogs.routineId, routineLogs.scheduledFor], set: { status: input.status, at, byUserId: userId, notes } });
   });
 }
 
-/** Correct a mistaken log (Admins only). */
+/** Correct a mistaken log. */
 export async function removeLog(userId: string, groupId: string, logId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const res = await tx.delete(routineLogs).where(and(eq(routineLogs.id, logId), eq(routineLogs.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
   });

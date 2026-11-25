@@ -6,21 +6,21 @@ import { requireMembership } from "../permissions";
 import { stockStatus, todayLocal } from "../schedule";
 import { MAX_QTY, roundQty, type InventoryItemInput, type StockChangeInput } from "../validation";
 
-// PRD §8, §6.5. Both roles view and change quantities; only Admins add, edit or delete products.
+// PRD §8, §6.5.
 // Every quantity change writes a movement row, so purchase and consumption history is complete.
 
 export type Item = typeof inventoryItems.$inferSelect;
 const withStatus = (i: Item, today = todayLocal()) => ({ ...i, ...stockStatus(i, today) });
 
 export async function listItems(userId: string, groupId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const items = await db.select().from(inventoryItems).where(eq(inventoryItems.groupId, groupId)).orderBy(asc(inventoryItems.name));
   const today = todayLocal();
-  return { role, items: items.map((i) => withStatus(i, today)) };
+  return { items: items.map((i) => withStatus(i, today)) };
 }
 
 export async function getItem(userId: string, groupId: string, itemId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const row = await db.select({ i: inventoryItems, planName: medicationPlans.name }).from(inventoryItems)
     .leftJoin(medicationPlans, eq(medicationPlans.id, inventoryItems.medicationPlanId))
     .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.groupId, groupId))).get();
@@ -32,7 +32,7 @@ export async function getItem(userId: string, groupId: string, itemId: string) {
     .where(and(eq(inventoryMovements.itemId, itemId), eq(inventoryMovements.groupId, groupId)))
     .orderBy(desc(inventoryMovements.createdAt), desc(sql`${inventoryMovements}.rowid`))
     .limit(100);
-  return { role, item: { ...withStatus(row.i), planName: row.planName }, history: history.map(({ m, byName }) => ({ ...m, byName })) };
+  return { item: { ...withStatus(row.i), planName: row.planName }, history: history.map(({ m, byName }) => ({ ...m, byName })) };
 }
 
 /** A linked medication plan must belong to the same group. */
@@ -44,7 +44,7 @@ async function checkPlan(tx: Tx, groupId: string, planId: string | null | undefi
 
 export async function createItem(userId: string, groupId: string, input: InventoryItemInput) {
   return writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await checkPlan(tx, groupId, input.medicationPlanId);
     const [i] = await tx.insert(inventoryItems).values({ ...input, groupId, createdById: userId }).returning({ id: inventoryItems.id });
     if (input.quantity > 0) await tx.insert(inventoryMovements).values({ groupId, itemId: i.id, kind: "purchase", delta: input.quantity, quantityAfter: input.quantity, byUserId: userId });
@@ -55,7 +55,7 @@ export async function createItem(userId: string, groupId: string, input: Invento
 /** Edits product details. A changed quantity is recorded as an adjustment. */
 export async function updateItem(userId: string, groupId: string, itemId: string, input: InventoryItemInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await checkPlan(tx, groupId, input.medicationPlanId);
     const old = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.groupId, groupId))).get();
     if (!old) throw new AppError("not_found");
@@ -68,7 +68,7 @@ export async function updateItem(userId: string, groupId: string, itemId: string
 /** PRD §8.3 allows deleting products; the history goes with it (the UI confirms first). */
 export async function deleteItem(userId: string, groupId: string, itemId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const res = await tx.delete(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.groupId, groupId)));
     if (res.rowsAffected === 0) throw new AppError("not_found");
   });
@@ -94,7 +94,7 @@ export async function applyStockChange(tx: Tx, groupId: string, itemId: string, 
   });
 }
 
-/** Both roles: record consumption or a purchase, set a counted quantity, or mark as depleted. */
+/** Record consumption or a purchase, set a counted quantity, or mark as depleted. */
 export async function changeStock(userId: string, groupId: string, itemId: string, change: StockChangeInput) {
   await writeTx(async (tx) => {
     await requireMembership(tx, userId, groupId);

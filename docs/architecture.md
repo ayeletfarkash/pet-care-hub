@@ -37,16 +37,16 @@ Rule: **UI → actions → services → db**. Services have no Next.js imports, 
 - `users` (email unique, lower-cased; `locale`; `deleted_at` reserved for PRD §4.8)
 - `sessions` (token hash, expiry; expired rows purged lazily at login)
 - `groups` (soft delete: `deleted_at`, restorable 30 days) ⟷ `pets` (1:1, `group_id UNIQUE`; vet + insurance columns merged in, since they are strictly 1:1)
-- `memberships` (unique `(group_id, user_id)`, role `admin|caregiver`)
-- `invitations` (token hash, role, optional bound email, reusable flag, use count, expiry, revoked_at)
+- `memberships` (unique `(group_id, user_id)`, `role` column unused since 2026-11-25)
+- `invitations` (token hash, unused `role`, optional bound email, reusable flag, use count, expiry, revoked_at)
 - `accessibility_preferences` (per user)
-- `audit_logs` (group-scoped; invites, joins, removals, role changes, pet edits; never stores tokens)
+- `audit_logs` (group-scoped; invites, joins, removals, pet edits; never stores tokens)
 
 ## Authorization
-- Every group-scoped service call starts with `requireMembership(executor, userId, groupId, minRole?)`.
+- Every group-scoped service call starts with `requireMembership(executor, userId, groupId)`. There are no roles: every member has the same rights (PRD §3).
 - Non-member and missing/deleted group both return `not_found` (no group-ID probing). Pages render 404.
 - Server Actions re-check everything; page-level checks are UX only.
-- Last-admin rule: checked and written inside one transaction (role change, removal, leave).
+- Last-member rule: checked and written inside one transaction (removal, leave); the last member deletes the group instead.
 
 ## Concurrency
 Local libsql runs SQLite synchronously on the Node thread. Two connections contending for the write lock would block the event loop (deadlock until busy timeout). So **all writes go through `writeTx()`**: an in-process queue + `BEGIN IMMEDIATE`. Reads remain concurrent (WAL mode).
@@ -61,11 +61,11 @@ Pet photos: magic-byte check (JPEG/PNG/WebP), 5 MB cap, generated filename under
 ## Phase 2: daily care
 | Module | Tables | Notes |
 |---|---|---|
-| Medical | `medical_records`, `attachments` | Both roles add records/documents; Admins edit/delete. Files: magic-byte check (PDF/JPG/PNG/WebP), 10 MB, removed from disk with their rows; served by `/groups/<id>/attachments/<aid>`. **No user-facing pages since the navigation update (2026-11-14):** data, service and download route kept; search no longer returns medical records |
-| Medications | `medication_plans`, `medication_administrations` | **Doses are computed** from the plan (`schedule.ts`), never stored. An administration row (unique per plan + scheduled time) is the only proof a dose was given. A dose may be confirmed ≤ 60 min early; Caregivers can record doses up to 48 h back, older ones need an Admin. Plans with history can be ended, not deleted |
+| Medical | `medical_records`, `attachments` | Files: magic-byte check (PDF/JPG/PNG/WebP), 10 MB, removed from disk with their rows; served by `/groups/<id>/attachments/<aid>`. **No user-facing pages since the navigation update (2026-11-14):** data, service and download route kept; search no longer returns medical records |
+| Medications | `medication_plans`, `medication_administrations` | **Doses are computed** from the plan (`schedule.ts`), never stored. An administration row (unique per plan + scheduled time) is the only proof a dose was given. A dose may be confirmed ≤ 60 min early. Plans with history can be ended, not deleted |
 | Events | `events`, `event_occurrence_status` | Occurrences computed from a recurrence rule; completed/cancelled stored per occurrence and validated against the rule |
-| Tasks | `tasks`, `task_assignees`, `task_comments`, `task_history`, `task_transfer_requests` | Overdue is computed. Recurring tasks need a due date; completing one inserts the next instance (`UNIQUE(series_id, due_at)` makes it idempotent); cancelling ends the series. One pending transfer per task (partial unique index) |
-| Reminders | none | "Today" on the dashboard is computed per request: my doses, my tasks, next 7 days, approvals. No notification table or jobs until Phase 4 |
+| Tasks | `tasks`, `task_assignees`, `task_comments`, `task_history`, `task_transfer_requests` | Overdue is computed. Recurring tasks need a due date; completing one inserts the next instance (`UNIQUE(series_id, due_at)` makes it idempotent); cancelling ends the series. Handovers apply at once; `task_transfer_requests` is unused and kept for old data |
+| Reminders | none | "Today" on the dashboard is computed per request: my doses, my tasks, next 7 days. No notification table or jobs until Phase 4 |
 
 Rules added in Phase 2:
 - **Times** are wall-clock strings in Israel time (`YYYY-MM-DDTHH:mm`); all maths in `src/server/schedule.ts` (unit-tested incl. DST, month-end clamping, Feb 29).
@@ -75,17 +75,17 @@ Rules added in Phase 2:
 - Success messages from controls that disappear after acting go to one app-wide live region (`components/live-region.tsx`).
 
 - After a one-button action removes its own button (complete, mark given), focus moves to the next item or the section heading (`forms/action-form.tsx`).
-- Completed tasks can be reopened by either role (undo a mis-tap); cancelling stays Admin-only.
+- Completed tasks can be reopened (undo a mis-tap).
 
 Deliberately not in Phase 2: notification recipients, reminder offsets, participants (Phase 4); medication inventory (Phase 3); automatic task creation (Phase 4); plan versioning (editing a plan's times re-computes past doses; existing administrations stay in history).
 
 ## Phase 3: inventory and routines
 | Module | Tables | Notes |
 |---|---|---|
-| Inventory | `inventory_items`, `inventory_movements` | Both roles change quantities (use, purchase, counted quantity, ran out); Admins add/edit/delete products. Every change writes a movement (delta + quantity after), so purchase/use history is complete. Quantities never go below 0 and are rounded to 3 decimals. Optional link to a medication plan (PRD §6.5) |
+| Inventory | `inventory_items`, `inventory_movements` | Every quantity change (use, purchase, counted quantity, ran out) writes a movement (delta + quantity after), so purchase/use history is complete. Quantities never go below 0 and are rounded to 3 decimals. Optional link to a medication plan (PRD §6.5) |
 | Stock estimate | none | Computed (`stockStatus` in `schedule.ts`): days left = quantity ÷ estimated daily use; reorder when at/below the user's threshold, at 0, or ≤ 7 days left (`REORDER_LEAD_DAYS`) |
-| Orders | `orders` | Both roles create orders and change status; Admins edit details/delete. URLs must parse as absolute http(s) and render with `rel="noopener noreferrer nofollow"`. Marking delivered can add the order quantity to the linked item, at most once (partial `UNIQUE(order_id)` on movements); changing the status back never removes stock |
-| Routines | `routines`, `routine_logs` | Same schedule columns and maths as medication plans (shared `scheduleShape` / `ScheduleFields`). Activities are computed; a log row records completed or missed. Re-logging the same activity updates it (missed → completed). Extra activities have no scheduled time and are always "completed". Caregivers log ≤ 48 h back; Admins remove logs. Routines with logs are ended, not deleted |
+| Orders | `orders` | URLs must parse as absolute http(s) and render with `rel="noopener noreferrer nofollow"`. Marking delivered can add the order quantity to the linked item, at most once (partial `UNIQUE(order_id)` on movements); changing the status back never removes stock |
+| Routines | `routines`, `routine_logs` | Same schedule columns and maths as medication plans (shared `scheduleShape` / `ScheduleFields`). Activities are computed; a log row records completed or missed. Re-logging the same activity updates it (missed → completed). Extra activities have no scheduled time and are always "completed". Routines with logs are ended, not deleted |
 
 Rules added in Phase 3:
 - The pet is implicit (one pet per group), so no `pet_id` columns.
@@ -108,7 +108,7 @@ Rules added in slice 1:
 - Recipients are filtered at creation: current members only, and only if the category is on in their preferences. Unassigned sources remind every member.
 - Low stock reminds every member once per restock cycle (cycle = number of purchase movements).
 - The sweep is a system job: group ids come from the database, so it has no `requireMembership` (documented exception).
-- Setting a rule needs the role that can create the source: Admin for plans/routines, any member for tasks/events. Selected recipients must be members.
+- Selected recipients must be members.
 - Leaving/removal deletes the user's notifications and rule-recipient rows in that group.
 - Reminders whose time is more than 6 h past are dropped (no flood after downtime, and none for back-dated items).
 
@@ -130,7 +130,7 @@ Push is off unless `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set; the inbox is 
 | Appointments | opt-in `events.auto_prep` / `auto_followup` (checkboxes on the event form) | Prep task appears up to 1 day before (due at the appointment); follow-up within 1 day after (due end of next day). Assigned to the event's responsible person if still a member. Cancelled occurrences get none |
 | Doses | none | Already computed, shown in Today and reminded; dose tasks would duplicate them |
 
-Task text is stored, so it is written in the language of the group's first Admin. History shows "Created automatically · Automatic" (actor null).
+Task text is stored, so it is written in the language of the group's longest-standing member. History shows "Created automatically · Automatic" (actor null).
 
 ### Slice 4: global search
 | Piece | Where | Notes |

@@ -9,7 +9,7 @@ import { SubmitButton } from "../ui/buttons";
 import { FormStatus } from "../ui/form-status";
 import { InviteShare } from "./invite-share";
 
-/** One compact form: role, expiry, reusable. The new link shows with its share actions. */
+/** One compact form: expiry, reusable. The new link shows with its share actions. */
 export function InviteForm({ t, groupId, petName }: { t: Dict; groupId: string; petName: string }) {
   const [state, action] = useActionState(createInviteAction, {} as FormState);
   const ref = useRef<HTMLFormElement>(null);
@@ -21,8 +21,6 @@ export function InviteForm({ t, groupId, petName }: { t: Dict; groupId: string; 
       <FormStatus state={state} formRef={ref} />
       <input type="hidden" name="groupId" value={groupId} />
       <div className="grid gap-x-4 sm:grid-cols-2">
-        <SelectField id="inv-role" name="role" label={i.role} defaultValue={v.role ?? "caregiver"}
-          options={[{ value: "caregiver", label: t.roles.caregiver }, { value: "admin", label: t.roles.admin }]} />
         <SelectField id="inv-expires" name="expiresInDays" label={i.expires} defaultValue={v.expiresInDays ?? "7"}
           options={["1", "3", "7", "14", "30"].map((d) => ({ value: d, label: d }))} />
       </div>

@@ -7,15 +7,15 @@ import { resetRateLimits } from "../rate-limit";
 import { authenticate, registerUser } from "./users";
 import { deleteGroup, listRestorableGroups, listUserGroups, restoreGroup } from "./groups";
 import { getPetForMember, setPetPhoto, sniffImage, updatePet } from "./pets";
-import { changeRole, leaveGroup, listMembers, removeMember } from "./members";
+import { leaveGroup, listMembers, removeMember } from "./members";
 import { acceptInvitation, createInvitation, listActiveInvitations, previewInvitation, revokeInvitation } from "./invitations";
 import { invitationSchema, petSchema, registerSchema } from "../validation";
 
 const code = async (p: Promise<unknown>) => {
   try { await p; return "ok"; } catch (e) { return (e as { code?: string }).code ?? String(e); }
 };
-const invite = (actor: string, g: string, o: Partial<{ role: "admin" | "caregiver"; reusable: boolean; email: string | null; expiresInDays: number }> = {}) =>
-  createInvitation(actor, g, { role: "caregiver", reusable: false, email: null, expiresInDays: 7, ...o });
+const invite = (actor: string, g: string, o: Partial<{ reusable: boolean; email: string | null; expiresInDays: number }> = {}) =>
+  createInvitation(actor, g, { reusable: false, email: null, expiresInDays: 7, ...o });
 
 beforeEach(() => resetRateLimits());
 
@@ -34,15 +34,13 @@ describe("auth", () => {
   });
 });
 
-describe("groups and roles", () => {
-  it("creator becomes the first admin; user can have different roles in different groups", async () => {
+describe("groups and members", () => {
+  it("a user can belong to several groups", async () => {
     const a = await makeUser(), b = await makeUser();
-    const g1 = await makeGroup(a.id, "Rex");
+    await makeGroup(a.id, "Rex");
     const g2 = await makeGroup(b.id, "Mitzi");
     await acceptInvitation(a.id, await invite(b.id, g2));
-    const mine = await listUserGroups(a.id);
-    expect(mine.map((g) => [g.petName, g.role]).sort()).toEqual([["Mitzi", "caregiver"], ["Rex", "admin"]]);
-    expect((await getPetForMember(a.id, g1)).role).toBe("admin");
+    expect((await listUserGroups(a.id)).map((g) => g.petName).sort()).toEqual(["Mitzi", "Rex"]);
   });
 
   it("non-members cannot read or change a group (same error as missing group)", async () => {
@@ -55,38 +53,39 @@ describe("groups and roles", () => {
     expect(await code(updatePet(outsider.id, g, petSchema.parse({ name: "X", species: "cat" })))).toBe("not_found");
   });
 
-  it("caregivers can view but not edit the pet or manage members", async () => {
-    const a = await makeUser(), c = await makeUser();
+  it("every member has the same rights, whoever created the group", async () => {
+    const a = await makeUser(), c = await makeUser(), d = await makeUser();
     const g = await makeGroup(a.id);
     await acceptInvitation(c.id, await invite(a.id, g));
-    expect((await getPetForMember(c.id, g)).pet.name).toBe("Rex");
-    expect(await code(updatePet(c.id, g, petSchema.parse({ name: "X", species: "cat" })))).toBe("forbidden");
-    expect(await code(invite(c.id, g))).toBe("forbidden");
-    expect(await code(changeRole(c.id, g, c.id, "admin"))).toBe("forbidden");
-    expect(await code(removeMember(c.id, g, a.id))).toBe("forbidden");
-    expect(await code(deleteGroup(c.id, g))).toBe("forbidden");
+    await updatePet(c.id, g, petSchema.parse({ name: "Max", species: "dog" }));
+    expect((await getPetForMember(a.id, g)).pet.name).toBe("Max");
+    await acceptInvitation(d.id, await invite(c.id, g)); // an invited member can invite others
+    await removeMember(d.id, g, a.id); // and remove anyone, including the creator
+    expect(await code(getPetForMember(a.id, g))).toBe("not_found");
+    await deleteGroup(d.id, g);
+    expect(await listUserGroups(c.id)).toHaveLength(0);
   });
 
-  it("a group cannot lose its last admin", async () => {
+  it("the last member can't leave or be removed", async () => {
     const a = await makeUser(), c = await makeUser();
     const g = await makeGroup(a.id);
+    expect(await code(leaveGroup(a.id, g))).toBe("last_member");
+    expect(await code(removeMember(a.id, g, a.id))).toBe("last_member");
     await acceptInvitation(c.id, await invite(a.id, g));
-    expect(await code(leaveGroup(a.id, g))).toBe("last_admin");
-    expect(await code(changeRole(a.id, g, a.id, "caregiver"))).toBe("last_admin");
-    expect(await code(removeMember(a.id, g, a.id))).toBe("last_admin");
-    await changeRole(a.id, g, c.id, "admin");
     await leaveGroup(a.id, g); // now allowed
     expect(await code(getPetForMember(a.id, g))).toBe("not_found");
+    expect(await code(leaveGroup(c.id, g))).toBe("last_member");
   });
 
-  it("concurrent demotions of the last two admins leave at least one admin", async () => {
-    const a = await makeUser(), b = await makeUser();
-    const g = await makeGroup(a.id);
-    await acceptInvitation(b.id, await invite(a.id, g, { role: "admin" }));
-    const results = await Promise.all([code(changeRole(a.id, g, b.id, "caregiver")), code(changeRole(b.id, g, a.id, "caregiver"))]);
-    const admins = (await listMembers(a.id, g).catch(() => listMembers(b.id, g))).filter((m) => m.role === "admin");
-    expect(admins.length).toBe(1);
-    expect(results.filter((r) => r === "ok").length).toBe(1);
+  it("when the last two members leave or remove each other at once, one stays", async () => {
+    for (const act of [(x: string, y: string, g: string) => removeMember(x, g, y), (x: string, _y: string, g: string) => leaveGroup(x, g)]) {
+      const a = await makeUser(), b = await makeUser();
+      const g = await makeGroup(a.id);
+      await acceptInvitation(b.id, await invite(a.id, g));
+      const results = await Promise.all([code(act(a.id, b.id, g)), code(act(b.id, a.id, g))]);
+      expect(results.filter((r) => r === "ok")).toHaveLength(1);
+      expect(await listMembers(a.id, g).catch(() => listMembers(b.id, g))).toHaveLength(1);
+    }
   });
 
   it("removing a member from one group does not affect their other groups", async () => {
@@ -102,25 +101,24 @@ describe("groups and roles", () => {
     const a = await makeUser(), c = await makeUser();
     const g = await makeGroup(a.id);
     await acceptInvitation(c.id, await invite(a.id, g));
-    expect((await getPetForMember(c.id, g)).role).toBe("caregiver");
+    expect((await getPetForMember(c.id, g)).pet.name).toBe("Rex");
     await removeMember(a.id, g, c.id);
     expect(await code(getPetForMember(c.id, g))).toBe("not_found");
     expect(await code(listMembers(c.id, g))).toBe("not_found");
     expect(await listUserGroups(c.id)).toHaveLength(0);
   });
 
-  it("admins cannot change or remove users who aren't in their group", async () => {
+  it("members cannot remove users who aren't in their group", async () => {
     const a = await makeUser(), x = await makeUser(), stranger = await makeUser();
     const g = await makeGroup(a.id);
-    const gx = await makeGroup(x.id); // x is admin of another group
-    expect(await code(changeRole(a.id, g, x.id, "caregiver"))).toBe("not_found");
+    const gx = await makeGroup(x.id); // x is in another group
     expect(await code(removeMember(a.id, g, x.id))).toBe("not_found");
     expect(await code(removeMember(a.id, g, stranger.id))).toBe("not_found");
     expect(await code(removeMember(a.id, gx, x.id))).toBe("not_found"); // a isn't in gx
-    expect((await getPetForMember(x.id, gx)).role).toBe("admin");
+    expect(await code(getPetForMember(x.id, gx))).toBe("ok");
   });
 
-  it("admin edits persist vet and insurance details", async () => {
+  it("edits persist vet and insurance details", async () => {
     const a = await makeUser();
     const g = await makeGroup(a.id);
     await updatePet(a.id, g, petSchema.parse({
@@ -151,16 +149,17 @@ describe("groups and roles", () => {
     expect(age("", "0")).toBeNull();
   });
 
-  it("soft-deleted groups are hidden and restorable by admins only", async () => {
-    const a = await makeUser(), c = await makeUser();
+  it("soft-deleted groups are hidden and restorable by any member, never by outsiders", async () => {
+    const a = await makeUser(), c = await makeUser(), out = await makeUser();
     const g = await makeGroup(a.id);
     await acceptInvitation(c.id, await invite(a.id, g));
     await deleteGroup(a.id, g);
     expect(await listUserGroups(a.id)).toHaveLength(0);
     expect(await code(getPetForMember(c.id, g))).toBe("not_found");
-    expect((await listRestorableGroups(a.id)).map((x) => x.groupId)).toEqual([g]);
-    expect(await code(restoreGroup(c.id, g))).toBe("forbidden");
-    await restoreGroup(a.id, g);
+    expect((await listRestorableGroups(c.id)).map((x) => x.groupId)).toEqual([g]);
+    expect(await listRestorableGroups(out.id)).toEqual([]);
+    expect(await code(restoreGroup(out.id, g))).toBe("not_found");
+    await restoreGroup(c.id, g);
     expect(await listUserGroups(c.id)).toHaveLength(1);
   });
 
@@ -173,13 +172,13 @@ describe("groups and roles", () => {
 });
 
 describe("invitations", () => {
-  it("single-use links work once; applies the invitation role", async () => {
+  it("single-use links work once", async () => {
     const a = await makeUser(), b = await makeUser(), c = await makeUser();
     const g = await makeGroup(a.id);
-    const t = await invite(a.id, g, { role: "admin" });
+    const t = await invite(a.id, g);
     expect((await previewInvitation(t))?.petName).toBe("Rex");
     await acceptInvitation(b.id, t);
-    expect((await getPetForMember(b.id, g)).role).toBe("admin");
+    expect(await code(getPetForMember(b.id, g))).toBe("ok");
     expect(await code(acceptInvitation(c.id, t))).toBe("invite_invalid");
     expect(await previewInvitation(t)).toBeNull();
   });
@@ -272,11 +271,10 @@ describe("pet photos", () => {
     expect(sniffImage(new TextEncoder().encode("<svg onload=alert(1)>"))).toBeNull();
   });
 
-  it("rejects non-images and caregiver uploads", async () => {
+  it("rejects non-images and uploads by non-members", async () => {
     const a = await makeUser(), c = await makeUser();
     const g = await makeGroup(a.id);
-    await acceptInvitation(c.id, await invite(a.id, g));
     expect(await code(setPetPhoto(a.id, g, new TextEncoder().encode("<html>")))).toBe("invalid_photo");
-    expect(await code(setPetPhoto(c.id, g, new Uint8Array([0xff, 0xd8, 0xff])))).toBe("forbidden");
+    expect(await code(setPetPhoto(c.id, g, new Uint8Array([0xff, 0xd8, 0xff])))).toBe("not_found");
   });
 });

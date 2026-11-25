@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  EVENT_TYPES, INVENTORY_TYPES, LOCALES, NOTIFICATION_CATEGORIES, RECIPIENT_MODES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, ROLES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
+  EVENT_TYPES, INVENTORY_TYPES, LOCALES, NOTIFICATION_CATEGORIES, RECIPIENT_MODES, MEDICAL_TYPES, MOVEMENT_KINDS, ORDER_STATUSES, RECURRENCES, SCHEDULE_TYPES, SEXES, SPECIES, TASK_PRIORITIES, TASK_RECURRENCES,
 } from "./db/schema";
 import { addDays, addMinutesLocal, isValidTime, nowLocal, todayLocal } from "./schedule";
 
@@ -74,15 +74,12 @@ export const petSchema = z
 export type PetInput = z.infer<typeof petSchema>;
 
 export const invitationSchema = z.object({
-  role: z.enum(ROLES).catch("caregiver"),
   email: z.string().trim().toLowerCase().max(254, "too_long").transform((v) => (v === "" ? null : v))
     .refine((v) => v == null || z.email().safeParse(v).success, "email").nullable().optional(),
   reusable: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   expiresInDays: z.coerce.number().int().min(1, "invalid_number").max(30, "invalid_number").catch(7),
 });
 export type InvitationInput = z.infer<typeof invitationSchema>;
-
-export const roleSchema = z.enum(ROLES);
 
 // ───────────── Phase 2 ─────────────
 const localDateTime = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, "invalid_date")
@@ -228,7 +225,7 @@ export const inventoryItemSchema = z.object({
 });
 export type InventoryItemInput = z.infer<typeof inventoryItemSchema>;
 
-/** Both roles: consumption/purchase take an amount, adjustment takes the counted quantity, depleted none. */
+/** Consumption/purchase take an amount, adjustment takes the counted quantity, depleted none. */
 export const stockChangeSchema = z
   .object({ kind: z.enum(MOVEMENT_KINDS), amount: qty(), note: opt(300) })
   .superRefine((v, ctx) => {

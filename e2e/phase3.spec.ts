@@ -34,11 +34,11 @@ test.describe("Phase 3 inventory and routines", () => {
     await expect(admin.getByText("About 6 days left")).toBeVisible();
     await expect(admin.getByText("Reorder soon").first()).toBeVisible(); // ≤ 7 days left
 
-    // Caregiver: no product management, but records use
+    // The other member manages products too, and records use
     await care.goto(`/groups/${groupId}/inventory`);
-    await expect(care.getByRole("link", { name: "Add product" })).toHaveCount(0);
+    await expect(care.getByRole("link", { name: "Add product" })).toBeVisible();
     await care.getByRole("link", { name: "Kibble" }).click();
-    await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0);
+    await expect(care.getByRole("link", { name: "Edit" })).toBeVisible();
     await care.getByLabel("What happened?").selectOption("consumption");
     await care.getByLabel(/^Amount/).fill("1");
     await care.getByRole("button", { name: "Save quantity" }).click();
@@ -64,7 +64,7 @@ test.describe("Phase 3 inventory and routines", () => {
     await care.getByRole("button", { name: "Save status" }).click();
     await ok(care, "Order status updated.");
     await expect(care.getByText("Added to inventory.")).toBeVisible();
-    await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0);
+    await expect(care.getByRole("link", { name: "Edit" })).toBeVisible();
     await care.getByRole("link", { name: "Kibble" }).last().click(); // linked product
     await expect(care.getByText("12 kg").first()).toBeVisible(); // 3 − 1 + 10
   });
@@ -83,7 +83,7 @@ test.describe("Phase 3 inventory and routines", () => {
     await expect(admin.getByRole("heading", { level: 1, name: "Morning walk" })).toBeVisible();
 
     await care.goto(`/groups/${groupId}/routines/new`);
-    await expect(care.getByRole("heading", { name: "Page not found" })).toBeVisible();
+    await expect(care.getByRole("button", { name: "Save" })).toBeVisible();
     await care.goto("/"); // assigned activity on the dashboard
     await care.getByRole("checkbox", { name: /^Mark as done: Morning walk/ }).check();
     await ok(care, "Activity logged.");

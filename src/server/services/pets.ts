@@ -13,15 +13,15 @@ const UPLOAD_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DIR
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export async function getPetForMember(userId: string, groupId: string) {
-  const role = await requireMembership(db, userId, groupId);
+  await requireMembership(db, userId, groupId);
   const pet = await db.select().from(pets).where(eq(pets.groupId, groupId)).get();
   if (!pet) throw new AppError("not_found");
-  return { pet, role };
+  return { pet };
 }
 
 export async function updatePet(userId: string, groupId: string, input: PetInput) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     await tx.update(pets).set({ ...input, updatedAt: new Date() }).where(eq(pets.groupId, groupId));
     await audit(tx, { groupId, actorId: userId, action: "pet.updated" });
   });
@@ -39,7 +39,7 @@ export function sniffImage(buf: Uint8Array): { ext: string; mime: string } | nul
 const MIME_BY_EXT: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 export async function setPetPhoto(userId: string, groupId: string, data: Uint8Array) {
-  await requireMembership(db, userId, groupId, "admin");
+  await requireMembership(db, userId, groupId);
   if (data.byteLength === 0 || data.byteLength > MAX_PHOTO_BYTES) throw new AppError("invalid_photo");
   const type = sniffImage(data);
   if (!type) throw new AppError("invalid_photo");
@@ -53,7 +53,7 @@ export const removePetPhoto = (userId: string, groupId: string) => replacePhoto(
 
 async function replacePhoto(userId: string, groupId: string, file: string | null) {
   const old = await writeTx(async (tx) => {
-    await requireMembership(tx, userId, groupId, "admin");
+    await requireMembership(tx, userId, groupId);
     const row = await tx.select({ f: pets.photoFile }).from(pets).where(eq(pets.groupId, groupId)).get();
     await tx.update(pets).set({ photoFile: file, updatedAt: new Date() }).where(eq(pets.groupId, groupId));
     await audit(tx, { groupId, actorId: userId, action: "pet.updated", meta: { photo: file ? "set" : "removed" } });

@@ -46,9 +46,8 @@ export default async function GroupPage({
   params, searchParams,
 }: { params: Promise<{ groupId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId } = await params;
-  const [{ pet, role }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
+  const [{ pet }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
   const p = t.pet;
-  const isAdmin = role === "admin";
   const ltr = (s: string | null) => (s ? <span className="ltr-value">{s}</span> : null);
   const age = pet.birthDate
     ? formatAge(t, yearsSince(pet.birthDate) * 12)
@@ -71,9 +70,8 @@ export default async function GroupPage({
             {pet.species === "other" && pet.speciesOther ? pet.speciesOther : t.species[pet.species]}
             {pet.breed ? ` · ${pet.breed}` : ""}
           </p>
-          <p className="mt-1 text-sm font-semibold">{fmt(t.group.yourRole, { role: t.roles[role] })}</p>
         </div>
-        {isAdmin && <LinkButton href={`/groups/${groupId}/edit`}>{p.edit}</LinkButton>}
+        <LinkButton href={`/groups/${groupId}/edit`}>{p.edit}</LinkButton>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -114,14 +112,12 @@ export default async function GroupPage({
             title={fmt(t.group.leaveTitle, { pet: pet.name })} body={t.group.leaveBody}>
             <ActionForm action={leaveGroupAction} fields={{ groupId }} label={t.group.leave} pendingLabel={t.common.saving} variant="danger" />
           </ConfirmDialog>
-          {isAdmin && (
-            <ConfirmDialog triggerLabel={t.group.delete} cancelLabel={t.common.cancel}
-              title={fmt(t.group.deleteTitle, { pet: pet.name })} body={t.group.deleteBody}>
-              <ActionForm action={deleteGroupAction} fields={{ groupId }} label={t.group.delete} pendingLabel={t.common.saving} variant="danger">
-                <TextField name="confirmName" label={t.group.deleteConfirmLabel} hint={pet.name} required requiredLabel={t.common.required} />
-              </ActionForm>
-            </ConfirmDialog>
-          )}
+          <ConfirmDialog triggerLabel={t.group.delete} cancelLabel={t.common.cancel}
+            title={fmt(t.group.deleteTitle, { pet: pet.name })} body={t.group.deleteBody}>
+            <ActionForm action={deleteGroupAction} fields={{ groupId }} label={t.group.delete} pendingLabel={t.common.saving} variant="danger">
+              <TextField name="confirmName" label={t.group.deleteConfirmLabel} hint={pet.name} required requiredLabel={t.common.required} />
+            </ActionForm>
+          </ConfirmDialog>
         </div>
       </section>
     </>

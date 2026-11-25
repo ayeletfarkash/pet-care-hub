@@ -1,50 +1,28 @@
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, writeTx, type Tx } from "../db";
-import { events, medicationPlans, memberships, routines, taskAssignees, taskTransferRequests, users, type Role } from "../db/schema";
+import { events, medicationPlans, memberships, routines, taskAssignees, users } from "../db/schema";
 import { audit } from "../audit";
 import { releaseNotifications } from "./notifications";
 import { AppError } from "../errors";
-import { countAdmins, requireMembership } from "../permissions";
+import { countMembers, requireMembership } from "../permissions";
 
 export async function listMembers(userId: string, groupId: string) {
   await requireMembership(db, userId, groupId);
   return db
-    .select({ userId: users.id, name: users.name, email: users.email, role: memberships.role, joinedAt: memberships.joinedAt })
+    .select({ userId: users.id, name: users.name, email: users.email, joinedAt: memberships.joinedAt })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(eq(memberships.groupId, groupId))
     .orderBy(asc(users.name));
 }
 
-async function targetRole(tx: Tx, groupId: string, targetUserId: string) {
-  const row = await tx
-    .select({ role: memberships.role })
-    .from(memberships)
-    .where(and(eq(memberships.groupId, groupId), eq(memberships.userId, targetUserId)))
-    .get();
-  if (!row) throw new AppError("not_found");
-  return row.role;
-}
-
-// All three run inside an IMMEDIATE transaction, so the admin count can't change between check and write.
-export async function changeRole(actorId: string, groupId: string, targetUserId: string, role: Role) {
-  await writeTx(async (tx) => {
-    await requireMembership(tx, actorId, groupId, "admin");
-    const current = await targetRole(tx, groupId, targetUserId);
-    if (current === role) return;
-    if (current === "admin" && (await countAdmins(tx, groupId)) <= 1) throw new AppError("last_admin");
-    await tx.update(memberships).set({ role })
-      .where(and(eq(memberships.groupId, groupId), eq(memberships.userId, targetUserId)));
-    await audit(tx, { groupId, actorId, action: "member.role_changed", targetUserId, meta: { from: current, to: role } });
-  });
-}
-
+// Both run inside an IMMEDIATE transaction, so the member count can't change between check and write.
 export async function removeMember(actorId: string, groupId: string, targetUserId: string) {
   await writeTx(async (tx) => {
-    await requireMembership(tx, actorId, groupId, "admin");
-    const current = await targetRole(tx, groupId, targetUserId);
-    if (current === "admin" && (await countAdmins(tx, groupId)) <= 1) throw new AppError("last_admin");
-    await tx.delete(memberships).where(and(eq(memberships.groupId, groupId), eq(memberships.userId, targetUserId)));
+    await requireMembership(tx, actorId, groupId);
+    const res = await tx.delete(memberships).where(and(eq(memberships.groupId, groupId), eq(memberships.userId, targetUserId)));
+    if (res.rowsAffected === 0) throw new AppError("not_found");
+    if ((await countMembers(tx, groupId)) === 0) throw new AppError("last_member"); // rolls the removal back
     await releaseResponsibilities(tx, groupId, targetUserId);
     await audit(tx, { groupId, actorId, action: actorId === targetUserId ? "member.left" : "member.removed", targetUserId });
   });
@@ -60,10 +38,6 @@ async function releaseResponsibilities(tx: Tx, groupId: string, userId: string) 
   await tx.update(medicationPlans).set({ responsibleUserId: null }).where(and(eq(medicationPlans.groupId, groupId), eq(medicationPlans.responsibleUserId, userId)));
   await tx.update(events).set({ assigneeId: null }).where(and(eq(events.groupId, groupId), eq(events.assigneeId, userId)));
   await tx.update(routines).set({ responsibleUserId: null }).where(and(eq(routines.groupId, groupId), eq(routines.responsibleUserId, userId)));
-  await tx.update(taskTransferRequests).set({ status: "rejected", decidedAt: new Date() }).where(and(
-    eq(taskTransferRequests.groupId, groupId), eq(taskTransferRequests.status, "pending"),
-    or(eq(taskTransferRequests.toUserId, userId), eq(taskTransferRequests.requestedById, userId)),
-  ));
 }
 
 /** What a member is responsible for (shown before leaving/removal). */
@@ -79,8 +53,8 @@ export async function responsibilitiesOf(groupId: string, userId: string) {
 
 export async function leaveGroup(userId: string, groupId: string) {
   await writeTx(async (tx) => {
-    const role = await requireMembership(tx, userId, groupId);
-    if (role === "admin" && (await countAdmins(tx, groupId)) <= 1) throw new AppError("last_admin");
+    await requireMembership(tx, userId, groupId);
+    if ((await countMembers(tx, groupId)) <= 1) throw new AppError("last_member");
     await tx.delete(memberships).where(and(eq(memberships.groupId, groupId), eq(memberships.userId, userId)));
     await releaseResponsibilities(tx, groupId, userId);
     await audit(tx, { groupId, actorId: userId, action: "member.left", targetUserId: userId });

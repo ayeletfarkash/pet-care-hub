@@ -21,7 +21,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const { groupId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
   const view = sp.view === "done" ? "done" : "open";
-  const { tasks, role } = await listTasks(user.id, groupId, view);
+  const { tasks } = await listTasks(user.id, groupId, view);
   const k = t.tasks;
   const tab = "-mb-0.5 inline-flex min-h-11 items-center border-b-4 border-transparent px-3 font-semibold text-fg no-underline hover:border-line aria-[current=page]:border-primary";
   return (
@@ -49,12 +49,10 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                   <span className="text-muted">· {x.assignees.length ? x.assignees.map((a) => a.name).join(", ") : k.unassigned}</span>
                 </p>
               </div>
-              {role === "admin" && (
-                <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} triggerAriaLabel={fmt(k.deleteLabel, { title: x.title })}
-                  cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
-                  <ActionForm action={deleteTaskAction} fields={{ groupId, taskId: x.id, stay: "1" }} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
-                </ConfirmDialog>
-              )}
+              <ConfirmDialog triggerIcon={<TrashIcon />} triggerLabel={k.deleteTask} triggerAriaLabel={fmt(k.deleteLabel, { title: x.title })}
+                cancelLabel={t.common.cancel} title={fmt(k.deleteTitle, { title: x.title })} body={k.deleteBody}>
+                <ActionForm action={deleteTaskAction} fields={{ groupId, taskId: x.id, stay: "1" }} label={k.deleteConfirm} pendingLabel={t.common.saving} variant="danger" className="[&_button]:w-full" />
+              </ConfirmDialog>
             </li>
           ))}
         </ul>

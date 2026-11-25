@@ -34,7 +34,7 @@ export const rowBodyClass = "min-w-40 flex-1";
 export const taskTone = { new: "info", in_progress: "info", completed: "success", cancelled: "neutral" } as const satisfies Record<string, Tone>;
 export const doseTone: Record<Dose["status"], Tone> = { given: "success", missed: "danger", due: "info", upcoming: "neutral" };
 
-/** One scheduled dose with a checkbox that records it as given. A recorded dose is locked: only the plan's history (Admins) can correct it. */
+/** One scheduled dose with a checkbox that records it as given. A recorded dose is locked: only the plan's history can correct it. */
 export function DoseItem({ t, locale, dose, showDate, petName }: { t: Dict; locale: Locale; dose: Dose; showDate?: boolean; petName?: string }) {
   const m = t.meds;
   const when = showDate ? formatLocalDateTime(locale, dose.scheduledFor) : formatLocalTime(locale, dose.scheduledFor);

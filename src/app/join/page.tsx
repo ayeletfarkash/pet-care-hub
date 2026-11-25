@@ -30,7 +30,6 @@ export default async function JoinPage() {
             <SpeciesIcon species={inv.species} />
             <div>
               <p className="text-lg font-bold">{fmt(t.join.invited, { pet: inv.petName })}</p>
-              <p className="text-muted">{fmt(t.join.asRole, { role: t.roles[inv.role] })}</p>
             </div>
           </div>
           {user ? (

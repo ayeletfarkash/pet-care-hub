@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { listPlans } from "@/server/services/medications";
 import { getT } from "@/i18n/server";
 import { BackLink } from "@/components/back-link";
@@ -13,8 +12,7 @@ export async function generateMetadata() {
 
 export default async function NewItemPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const { plans } = await listPlans(user.id, groupId);
   return (
     <div className="mx-auto max-w-3xl">

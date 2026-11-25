@@ -8,10 +8,10 @@ A shared web app for coordinating a pet's care between family members, partners,
 
 | Area | What you can do |
 |---|---|
-| Groups and roles | Create a group per pet, invite people by link or email, Admin and Caregiver roles, leave or remove members, delete and restore a group within 30 days |
+| Groups | Create a group per pet, invite people by link, every member has the same rights, leave or remove members, delete and restore a group within 30 days |
 | Pet profile | Species, breed, weight, photo, vet and insurance details |
 | Medical | Medical history with documents, medication plans with computed doses, "mark as given" with a full administration history |
-| Calendar and tasks | Appointments and recurring events, tasks with assignees, comments, handover requests and recurring tasks |
+| Calendar and tasks | Appointments and recurring events, tasks with assignees, comments, handovers and recurring tasks |
 | Inventory and orders | Stock levels with estimated days left, purchase and use history, orders that restock on delivery |
 | Routines | Walks, feeding and other activities, logged as completed or missed |
 | Notifications | A reminders inbox, personal preferences per category, a choice of who gets each reminder and how early, snooze, and optional phone push notifications (installable PWA) |

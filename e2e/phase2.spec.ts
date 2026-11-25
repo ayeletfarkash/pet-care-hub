@@ -21,7 +21,7 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jer
 const ok = (p: Page, text: string | RegExp) => expect(p.getByRole("status").filter({ hasText: text })).toBeVisible();
 
 test.describe("Phase 2 daily care", () => {
-  test("medications: admin plans, caregiver confirms a scheduled dose; dose and plan permissions hold", async ({ browser }) => {
+  test("medications: admin plans, caregiver confirms a scheduled dose; the other member can manage plans too", async ({ browser }) => {
     const { admin, care, groupId } = await team(browser);
     await admin.goto(`/groups/${groupId}/medications`);
     await admin.getByRole("link", { name: "Add medication plan" }).click();
@@ -38,9 +38,9 @@ test.describe("Phase 2 daily care", () => {
     await expect(admin.getByRole("heading", { level: 1, name: "Apoquel" })).toBeVisible();
     await expect(admin.getByText("Every day at 00:00")).toBeVisible();
 
-    // Caregiver: no plan management, but can confirm the scheduled dose
+    // The other member can also manage plans, and confirms the scheduled dose
     await care.goto(`/groups/${groupId}/medications`);
-    await expect(care.getByRole("link", { name: "Add medication plan" })).toHaveCount(0);
+    await expect(care.getByRole("link", { name: "Add medication plan" })).toBeVisible();
     const dose = care.getByRole("checkbox", { name: /^Mark as given: Apoquel/ }).first();
     await dose.check();
     await ok(care, "Dose recorded.");
@@ -56,7 +56,8 @@ test.describe("Phase 2 daily care", () => {
     await admin.getByRole("link", { name: "Apoquel" }).click();
     await expect(admin.getByRole("table")).toContainText("Cai Caregiver");
     await care.goto(`/groups/${groupId}/medications/new`);
-    await expect(care.getByRole("heading", { name: "Page not found" })).toBeVisible();
+    await expect(care.getByRole("heading", { name: "Page not found" })).toHaveCount(0);
+    await expect(care.getByRole("button", { name: "Save" })).toBeVisible();
   });
 
   test("tasks and calendar: assignment shows on the dashboard; caregiver completes; events can be completed", async ({ browser }) => {
@@ -85,7 +86,7 @@ test.describe("Phase 2 daily care", () => {
 
     await care.goto("/");
     await care.getByRole("link", { name: "Buy dog food" }).click();
-    await expect(care.getByRole("link", { name: "Edit" })).toHaveCount(0);
+    await expect(care.getByRole("link", { name: "Edit" })).toBeVisible();
     const done = care.getByRole("checkbox", { name: "Mark completed" });
     await done.focus();
     await care.keyboard.press("Enter"); // must not submit anything
@@ -99,7 +100,6 @@ test.describe("Phase 2 daily care", () => {
     await care.keyboard.press("Space"); // again reopens it
     await expect(care.locator("li", { hasText: /^Reopened/ })).toBeVisible();
     await expect(done).not.toBeChecked();
-    await expect(care.getByRole("button", { name: /^Delete task/ })).toHaveCount(0); // caregivers can't delete
     await care.goto(`/groups/${groupId}/tasks`);
     await care.getByRole("checkbox", { name: "Mark completed: Buy dog food" }).check();
     await ok(care, "Task completed.");

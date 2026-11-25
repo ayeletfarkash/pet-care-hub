@@ -15,7 +15,7 @@ export async function generateMetadata() {
 
 export default async function MedicationsPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId } = await params;
-  const [{ user, role }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
+  const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
   const { from } = recentWindow(), today = todayLocal();
   const [{ plans }, doses] = await Promise.all([listPlans(user.id, groupId), groupDoses(user.id, groupId, from, today)]);
   const m = t.meds;
@@ -24,7 +24,7 @@ export default async function MedicationsPage({ params, searchParams }: { params
   return (
     <>
       <Notice t={t} notice={sp.notice} />
-      <SectionHeader as="h1" id="meds-h" title={m.title} action={role === "admin" ? { href: `/groups/${groupId}/medications/new`, label: m.newPlan } : undefined} />
+      <SectionHeader as="h1" id="meds-h" title={m.title} action={{ href: `/groups/${groupId}/medications/new`, label: m.newPlan }} />
       <p role="note" className="mb-6 rounded-lg border-2 border-line bg-accent p-3 text-sm">{m.disclaimer}</p>
 
       <section aria-labelledby="today-h" className="mb-8">

@@ -10,8 +10,7 @@ import { loadGroup } from "../../../load";
 
 export default async function EditRoutinePage({ params }: { params: Promise<{ groupId: string; routineId: string }> }) {
   const { groupId, routineId } = await params;
-  const [{ user, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound();
+  const [{ user }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const [{ routine }, members] = await Promise.all([getRoutine(user.id, groupId, routineId).catch(() => notFound()), listMembers(user.id, groupId)]);
   return (
     <div className="mx-auto max-w-3xl">

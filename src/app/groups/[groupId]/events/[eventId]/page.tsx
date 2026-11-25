@@ -18,8 +18,8 @@ import { ReminderSection } from "@/components/reminder-section";
 export default async function EventPage({ params, searchParams }: { params: Promise<{ groupId: string; eventId: string }>; searchParams: Promise<{ notice?: string }> }) {
   const { groupId, eventId } = await params;
   const [{ user }, { t, locale }, sp] = await Promise.all([loadGroup(groupId), getT(), searchParams]);
-  const { event: e, assigneeName, statuses, role } = await getEvent(user.id, groupId, eventId).catch((x) => { if (x instanceof AppError) notFound(); throw x; });
-  const ev = t.events, isAdmin = role === "admin";
+  const { event: e, assigneeName, statuses } = await getEvent(user.id, groupId, eventId).catch((x) => { if (x instanceof AppError) notFound(); throw x; });
+  const ev = t.events;
   const today = todayLocal();
   // The next few occurrences (from today, up to a year ahead), with their status.
   const next = occurrences(e.startsAt, e.recurrence, e.recurrenceUntil, today, addDays(today, 366), 6);
@@ -35,7 +35,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <h1 className="text-3xl font-bold">{e.title}</h1>
           <p className="mt-1 flex flex-wrap gap-2"><Badge>{ev.types[e.type]}</Badge><Badge>{ev.recurrences[e.recurrence]}</Badge></p>
         </div>
-        {isAdmin && <LinkButton variant="secondary" href={`/groups/${groupId}/events/${eventId}/edit`}>{t.ui.edit}</LinkButton>}
+        <LinkButton variant="secondary" href={`/groups/${groupId}/events/${eventId}/edit`}>{t.ui.edit}</LinkButton>
       </div>
       <dl className="card mb-6 grid gap-x-6 gap-y-3 rounded-xl border-2 border-divider bg-surface p-5 sm:grid-cols-[minmax(8rem,auto)_1fr]">
         {row(ev.date, when(e.startsAt))}
@@ -73,11 +73,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {next.length > 0 && <ReminderSection t={t} userId={user.id} groupId={groupId} sourceType="event" sourceId={eventId} />}
 
-      {isAdmin && (
-        <ConfirmDialog triggerLabel={ev.deleteEvent} cancelLabel={t.common.cancel} title={fmt(ev.deleteTitle, { title: e.title })} body={ev.deleteBody}>
-          <ActionForm action={deleteEventAction} fields={{ groupId, eventId }} label={ev.deleteEvent} pendingLabel={t.common.saving} variant="danger" />
-        </ConfirmDialog>
-      )}
+      <ConfirmDialog triggerLabel={ev.deleteEvent} cancelLabel={t.common.cancel} title={fmt(ev.deleteTitle, { title: e.title })} body={ev.deleteBody}>
+        <ActionForm action={deleteEventAction} fields={{ groupId, eventId }} label={ev.deleteEvent} pendingLabel={t.common.saving} variant="danger" />
+      </ConfirmDialog>
     </div>
   );
 }

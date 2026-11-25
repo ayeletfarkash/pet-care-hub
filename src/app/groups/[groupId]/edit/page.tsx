@@ -1,5 +1,4 @@
 import { BackLink } from "@/components/back-link";
-import { notFound } from "next/navigation";
 import { fmt } from "@/i18n";
 import { getT } from "@/i18n/server";
 import { PetForm } from "@/components/forms/pet-form";
@@ -14,8 +13,7 @@ export async function generateMetadata({ params }: { params: Promise<{ groupId: 
 
 export default async function EditPetPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
-  const [{ pet, role }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
-  if (role !== "admin") notFound(); // the action enforces this too
+  const [{ pet }, { t }] = await Promise.all([loadGroup(groupId), getT()]);
   const { id: _id, groupId: _g, photoFile, createdAt: _c, updatedAt, ...values } = pet;
 
   return (

@@ -104,71 +104,17 @@ The dashboard distinguishes between:
 
 ---
 
-# 3. User Roles and Permissions
+# 3. Members and Permissions
 
-The application has two roles:
+There are no roles (changed 2026-11-25; the original Admin/Caregiver split was removed). Every member of a group has the same rights: viewing, creating, editing and deleting everything in the group, inviting and removing members, and deleting or restoring the group.
 
-1. Admin
-2. Caregiver
+Wherever this document still says "Admin", "Admins" or "Caregiver", read "any member of the group". Anything described as Admin approval no longer exists.
 
-## 3.1 Admin
-
-Admins have full management permissions within their group.
-
-They can:
-- Invite and remove group members.
-- Assign and change user roles.
-- Create, edit, and delete the pet profile.
-- Manage medical records and medication plans.
-- Manage existing appointments and events.
-- Manage products and inventory definitions.
-- Manage existing orders.
-- Edit tasks and assign responsibilities.
-- Manage recurring routines.
-- Delete the group.
-
-A group can have multiple Admins.
-
-The last Admin cannot leave the group or be removed without appointing another Admin.
-
-## 3.2 Caregiver
-
-Caregivers can access relevant pet-care information and perform day-to-day care activities.
-
-Their permissions are defined per module below.
-
-## 3.3 Permission Matrix
-
-| Feature | Admin | Caregiver |
-|---|---|---|
-| View pet profile | Yes | Yes |
-| Create/edit/delete pet profile | Yes | No |
-| View medical history | Yes | Yes |
-| Add medical documentation | Yes | Yes |
-| Edit/delete existing medical records | Yes | No |
-| Create/edit medication plans | Yes | No |
-| Mark medication as administered | Yes | Yes |
-| View appointments | Yes | Yes |
-| Create appointments | Yes | Yes |
-| Edit/delete existing appointments | Yes | No |
-| Mark appointments completed/cancelled | Yes | Yes |
-| View inventory | Yes | Yes |
-| Update inventory quantities | Yes | Yes |
-| Add/edit/delete products | Yes | No |
-| View orders | Yes | Yes |
-| Create orders | Yes | Yes |
-| Update order status | Yes | Yes |
-| Edit/delete existing orders | Yes | No |
-| View tasks | Yes | Yes |
-| Create tasks | Yes | Yes |
-| Complete tasks | Yes | Yes |
-| Edit tasks and assignments | Yes | No |
-| Request responsibility transfer | Yes | Yes |
-| Manage fixed routines | Yes | No |
-| Log routine activities | Yes | Yes |
-| Manage group members | Yes | No |
-
-All permissions must be enforced on the backend, not only by hiding interface elements.
+- Only members can access a group. Group data stays isolated from non-members.
+- The last member cannot leave a group; they can delete it instead.
+- Task handovers apply immediately, without approval.
+- Doses and routine activities can be recorded for any past date.
+- Membership must be enforced on the backend, not only by hiding interface elements.
 
 ---
 
@@ -1542,18 +1488,18 @@ The following rules are core system constraints:
 1. Every group represents exactly one pet.
 2. Every pet belongs to exactly one group.
 3. A user can belong to multiple groups.
-4. A user's role is defined separately for each group.
-5. There are only two roles: Admin and Caregiver.
-6. Only Admins can manage group members and roles.
-7. Only Admins can edit the pet profile.
-8. Caregivers can add medical documentation but cannot edit or delete existing medical records.
-9. Both roles can mark medication as administered.
+4. Membership is separate for each group.
+5. There are no roles: all members of a group have the same rights.
+6. Any member can manage group members.
+7. Any member can edit the pet profile.
+8. Any member can add, edit and delete medical documentation.
+9. Any member can mark medication as administered.
 10. Medication administration must never be inferred from a notification.
 11. The application must not recommend or change veterinary dosages.
 12. Snoozing a reminder must not change the underlying schedule.
 13. Group data must remain isolated.
 14. Search results must respect group membership and permissions.
-15. A group cannot lose its last Admin.
+15. A group cannot lose its last member (it can be deleted instead).
 16. Removing a user from one group must not affect their other groups.
 17. No AI functionality is required in the MVP.
 18. No expense-management or budgeting module is required.
